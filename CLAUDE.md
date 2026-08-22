@@ -116,6 +116,22 @@ shim/                    New code only: Win32-type/API compatibility
                          file's own header comment and the milestone 4
                          notes below for the reasoning and what's
                          still ahead.
+  win32_handle.h,        Tagged-dispatch HANDLE: file, event, and
+  win32_handle.c         thread objects behind one opaque HANDLE type,
+                         the same SelectObject-style trick gdi.c uses
+                         for GDI objects. Needed because CloseHandle
+                         and WaitForSingleObject are each called on
+                         more than one kind of handle by vendor code
+                         (KEYMACRO.C's CloseHandle on both a file and
+                         event/thread handles; ENGINE.C's
+                         WaitForSingleObject on both event and thread
+                         handles) - real implementations throughout,
+                         including real pthread-backed events and
+                         threads, not declared-only stubs. File I/O
+                         (CreateFile/ReadFile/WriteFile/
+                         SetFilePointer/GetFileSize) moved here from
+                         win32_types.h once CloseHandle needed to
+                         dispatch across all three kinds together.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -372,9 +388,11 @@ as literal dialogs).
    which `REAL28CL.KML` has - a separate follow-up, not this slice's;
    this file calls `CreateMainBitmap`/`CreateLcdBitmap` directly
    instead, with the real skin's `Lcd Zoom 2 / Offset 474 177` values
-   read out of `REAL28C.KMI` by hand); the CPU-emulation worker thread
-   and the real thread/event-sync primitives it needs (still the
-   tagged-`HANDLE` design question flagged above); keyboard/mouse
+   read out of `REAL28C.KMI` by hand); actually starting the
+   CPU-emulation worker thread and wiring it into this window (the
+   thread/event-sync primitives it needs are done now - see below -
+   but nothing calls `ENGINE.C`'s `WorkerThread` yet, and doing that
+   usefully needs a ROM, which needs FILES.C too); keyboard/mouse
    input; window resizing/menus/dialogs (the stub functions in
    `sdl_main.c` are the minimum needed to satisfy `DISPLAY.C`'s *other*
    functions, which still get compiled into its object file and still
@@ -404,6 +422,45 @@ as literal dialogs).
    and Winsock bugs: compiling clean proves nothing about runtime
    correctness for code paths a syntax check can't exercise - only
    actually running it does.
+
+   **Thread/event-sync primitives done**: `shim/win32_handle.h`/`.c`
+   give `CreateEvent`/`SetEvent`/`ResetEvent`/`CreateThread`/
+   `WaitForSingleObject`/`CloseHandle` real implementations - resolving
+   the tagged-`HANDLE` design question flagged since milestone 2's
+   extension (`ENGINE.C` calls `WaitForSingleObject` on both event and
+   thread handles; `KEYMACRO.C` calls `CloseHandle` on file, event,
+   *and* thread handles, all in one function). Same shape as gdi.c's
+   `SelectObject`/`DeleteObject` trick: every `HANDLE` this file hands
+   out points at a small struct whose first field says what kind of
+   kernel object it actually is, and every function reads that tag
+   before deciding what to do. Events and threads both reduce to "wait
+   until this mutex-guarded flag becomes true" (a thread's flag is set
+   by a pthread trampoline once its start routine returns) - which is
+   exactly the polymorphism real Win32's `WaitForSingleObject` relies
+   on, and exactly why `ENGINE.C` is allowed to call it on either kind
+   without knowing which it has. `CreateFile`/`ReadFile`/`WriteFile`/
+   `SetFilePointer`/`GetFileSize` moved here from `win32_types.h` too,
+   since `CloseHandle` needed one dispatch point across all three
+   HANDLE flavors, not three independent implementations sharing a
+   type name.
+
+   Verified with real concurrent behavior, not just API surface: a
+   background thread that sleeps 120ms then calls `SetEvent`, checked
+   against wall-clock time to confirm the main thread actually blocked
+   until signaled rather than returning early (a bug here would most
+   likely look like premature/spurious wake-ups, which a
+   single-threaded test can't expose at all); manual- vs. auto-reset
+   consume-on-wait semantics; `WaitForSingleObject` on a thread handle
+   actually waiting for the worker to finish (checked via a flag the
+   worker sets right before returning); a timeout that genuinely
+   expires (`WAIT_TIMEOUT`); and a file handle handed to
+   `WaitForSingleObject` failing cleanly instead of misinterpreting
+   the union and crashing.
+
+   Not yet done: actually calling `CreateThread` on `ENGINE.C`'s
+   `WorkerThread` from `sdl_main.c` - see the milestone 4 note above on
+   why that's blocked on FILES.C/ROM loading to be useful, not on
+   anything in this primitive layer.
 5. Stub `SETTINGS.C` (registry) to a flat config file, and initially stub
    `SOUND.C`/`SNDENUM.C` entirely (sound isn't needed for the HP-28C
    menu/UI research this project exists to support) rather than porting

@@ -423,25 +423,16 @@ typedef struct {
 extern BOOL GetSystemPowerStatus(LPSYSTEM_POWER_STATUS lpSystemPowerStatus);
 
 /* ---- thread/event synchronization -----------------------------------------------
- * ENGINE.C's worker-thread state machine waits on both event handles
+ * Real implementation in win32_handle.h/.c now, not here: ENGINE.C's
+ * worker-thread state machine waits on both event handles
  * (hEventDebug, hEventShutdn) and a thread handle (hThread) through
  * the same WaitForSingleObject() call, which is only well-defined
- * because real Win32 HANDLEs are polymorphic kernel objects. Giving
- * this shim's opaque HANDLE (see above) that same polymorphism is a
- * real design decision - which kind of object a HANDLE names, and how
- * WaitForSingleObject dispatches on it - that belongs with the
- * threading work itself, not this types header. Declared, not
- * implemented, here. */
-
-#define INFINITE 0xFFFFFFFFu
-
-#define WAIT_OBJECT_0 0x00000000u
-#define WAIT_TIMEOUT  0x00000102u
-#define WAIT_FAILED   0xFFFFFFFFu
-
-extern DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
-extern BOOL  SetEvent(HANDLE hEvent);
-extern BOOL  ResetEvent(HANDLE hEvent);
+ * because real Win32 HANDLEs are polymorphic kernel objects - giving
+ * this shim's opaque HANDLE that same polymorphism needed its own
+ * tagged-dispatch design, the same shape as gdi.c's
+ * bitmap/brush/pen SelectObject trick, so it lives with the file-I/O
+ * HANDLE implementation (CloseHandle needs to dispatch on all three
+ * kinds too) rather than as more inline functions here. */
 
 /* ---- clipboard -------------------------------------------------------------------
  * STACK.C's stack-copy/paste commands go through the Windows clipboard
@@ -473,12 +464,13 @@ extern BOOL MessageBeep(UINT uType);
 
 /* ---- file I/O ------------------------------------------------------------------
  * HANDLE-based Win32 file I/O maps directly onto POSIX file
- * descriptors - unlike the handle-polymorphism problem in the thread/
- * event section below, a HANDLE returned from CreateFile is always
- * just a file, so this is real CRT-primitive territory like the
- * memory/string functions above. The fd is smuggled through HANDLE
- * (an opaque void*) as its integer value; INVALID_HANDLE_VALUE (-1)
- * can never collide with a real fd (always >= 0). */
+ * descriptors - real CRT-primitive territory, like the memory/string
+ * functions above. CreateFile/ReadFile/WriteFile/CloseHandle/
+ * SetFilePointer/GetFileSize themselves live in win32_handle.h/.c
+ * now, not here: CloseHandle is also called on event and thread
+ * handles (see win32_handle.h), so all three HANDLE flavors need to
+ * funnel through one tagged-dispatch implementation, the same
+ * SelectObject-style trick gdi.c uses for bitmaps/brushes/pens. */
 
 #define GENERIC_READ  0x80000000u
 #define GENERIC_WRITE 0x40000000u
@@ -501,91 +493,6 @@ extern BOOL MessageBeep(UINT uType);
 #ifndef INVALID_SET_FILE_POINTER
 #define INVALID_SET_FILE_POINTER ((DWORD)-1)
 #endif
-
-static inline HANDLE CreateFile(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
-                                 LPVOID lpSecurityAttributes, DWORD dwCreationDisposition,
-                                 DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
-{
-	int flags;
-	int fd;
-
-	(void)dwShareMode;
-	(void)lpSecurityAttributes;
-	(void)dwFlagsAndAttributes;
-	(void)hTemplateFile;
-
-	if ((dwDesiredAccess & GENERIC_READ) && (dwDesiredAccess & GENERIC_WRITE))
-		flags = O_RDWR;
-	else if (dwDesiredAccess & GENERIC_WRITE)
-		flags = O_WRONLY;
-	else
-		flags = O_RDONLY;
-
-	if (dwCreationDisposition == CREATE_ALWAYS)
-		flags |= O_CREAT | O_TRUNC;
-
-	fd = open(lpFileName, flags, 0644);
-	if (fd < 0)
-		return INVALID_HANDLE_VALUE;
-	return (HANDLE)(intptr_t)fd;
-}
-
-static inline BOOL ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,
-                             LPDWORD lpNumberOfBytesRead, LPVOID lpOverlapped)
-{
-	ssize_t n;
-
-	(void)lpOverlapped;
-	n = read((int)(intptr_t)hFile, lpBuffer, nNumberOfBytesToRead);
-	if (lpNumberOfBytesRead)
-		*lpNumberOfBytesRead = (n < 0) ? 0 : (DWORD)n;
-	return n >= 0;
-}
-
-static inline BOOL WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,
-                              LPDWORD lpNumberOfBytesWritten, LPVOID lpOverlapped)
-{
-	ssize_t n;
-
-	(void)lpOverlapped;
-	n = write((int)(intptr_t)hFile, lpBuffer, nNumberOfBytesToWrite);
-	if (lpNumberOfBytesWritten)
-		*lpNumberOfBytesWritten = (n < 0) ? 0 : (DWORD)n;
-	return n >= 0;
-}
-
-static inline BOOL CloseHandle(HANDLE hObject)
-{
-	return close((int)(intptr_t)hObject) == 0;
-}
-
-static inline DWORD SetFilePointer(HANDLE hFile, LONG lDistanceToMove,
-                                    LONG *lpDistanceToMoveHigh, DWORD dwMoveMethod)
-{
-	off_t pos;
-	int whence;
-
-	(void)lpDistanceToMoveHigh;
-	switch (dwMoveMethod) {
-	case FILE_CURRENT: whence = SEEK_CUR; break;
-	case FILE_END:      whence = SEEK_END; break;
-	default:            whence = SEEK_SET; break;
-	}
-
-	pos = lseek((int)(intptr_t)hFile, lDistanceToMove, whence);
-	return (pos == (off_t)-1) ? INVALID_SET_FILE_POINTER : (DWORD)pos;
-}
-
-static inline DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh)
-{
-	struct stat st;
-
-	if (fstat((int)(intptr_t)hFile, &st) != 0)
-		return INVALID_SET_FILE_POINTER;
-	if (lpFileSizeHigh)
-		*lpFileSizeHigh = (DWORD)((uint64_t)st.st_size >> 32);
-	return (DWORD)st.st_size;
-}
 
 static inline BOOL SetCurrentDirectory(LPCTSTR lpPathName)
 {
@@ -792,17 +699,6 @@ static inline int win32_sendto(SOCKET s, LPCCH buf, int len, int flags, LPSOCKAD
 	return (int)sendto(s, buf, (size_t)len, flags, (struct sockaddr *)&real_addr, sizeof(real_addr));
 }
 #define sendto(s, buf, len, flags, to, tolen) win32_sendto((s), (buf), (len), (flags), (to), (tolen))
-
-/* ---- thread/event synchronization, continued --------------------------------------
- * See the WaitForSingleObject/SetEvent/ResetEvent section above for
- * why these stay declared-not-implemented. */
-
-typedef DWORD (*LPTHREAD_START_ROUTINE)(LPVOID);
-
-extern HANDLE CreateEvent(LPVOID lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCTSTR lpName);
-extern HANDLE CreateThread(LPVOID lpThreadAttributes, SIZE_T dwStackSize,
-                            LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter,
-                            DWORD dwCreationFlags, LPDWORD lpThreadId);
 
 /* ---- winmm multimedia timer (TIMER.C) ----------------------------------------------
  * timeSetEvent runs its callback on its own OS-managed thread at a
