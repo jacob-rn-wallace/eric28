@@ -505,10 +505,21 @@ as literal dialogs).
    still isn't porting DirectSound/waveOut, sound still isn't needed
    for the HP-28C menu/UI research this project exists to support -
    revisit only if that changes.
-6. `STEGANO.C` (steganographic ROM-in-PNG loading, GDI-touching per the
-   table above) - likely lowest priority; confirm it's not on the
-   critical path for basic emulator bring-up before spending any time on
-   it.
+6. ~~`STEGANO.C` (steganographic ROM-in-PNG loading, GDI-touching per
+   the table above) - likely lowest priority; confirm it's not on the
+   critical path for basic emulator bring-up before spending any time
+   on it.~~ - confirmed, not on the critical path: `FILES.C` is
+   `STEGANO.H`'s only includer among vendor `.C` files besides
+   `STEGANO.C` itself, nothing else references it, and `FILES.C` is
+   itself still a future milestone (needed for ordinary direct-ROM-
+   file loading; Stegano would only matter for the niche "ROM hidden
+   inside a PNG via steganography" loading path within that). No code
+   changes needed - correctly stays untouched until (if ever) that
+   niche path is actually wanted. (Also worth noting for whenever
+   `FILES.C` is tackled: `STEGANO.H`'s own header comment says "This
+   file is part of Emu42" - a leftover from the sibling emulator this
+   code was seemingly shared with upstream, not an error to fix here;
+   `vendor/` stays byte-identical to what Giesselink published.)
 
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the
