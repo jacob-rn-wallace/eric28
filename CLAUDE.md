@@ -107,6 +107,15 @@ shim/                    New code only: Win32-type/API compatibility
                          combo boxes, window messaging, keyboard-layout
                          queries) are declared-only in win32_types.h
                          instead - see its own section comments.
+  sdl_main.c             SDL2 platform layer (milestone 4, first
+                         slice): opens a real on-screen window and
+                         renders the composited skin+LCD through
+                         gdi.h/DISPLAY.C's pipeline. Does not yet
+                         parse a real .KML script, run the CPU-
+                         emulation thread, or handle input - see the
+                         file's own header comment and the milestone 4
+                         notes below for the reasoning and what's
+                         still ahead.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -340,6 +349,61 @@ as literal dialogs).
    thread/event-sync `HANDLE` design decision flagged above belongs
    (`WaitForSingleObject` et al., currently declared-not-implemented in
    `win32_types.h`).
+
+   **First slice done**: `shim/sdl_main.c` opens a real, on-screen
+   SDL2 window and renders the fully-composited HP-28C skin + LCD
+   through the complete milestones-1-3 pipeline - `CreateMainBitmap`
+   loading the real `skins/hp28c/REAL28C.BMP`, `CreateLcdBitmap`/
+   `UpdateMainDisplay` compositing the (currently all-off, since
+   `Chipset` is zero-initialized with no CPU thread running yet) LCD
+   state, uploaded into an `SDL_Texture` and presented every frame.
+   Verified with an actual screenshot of the live window (via
+   `SDL_RenderReadPixels`, called *before* `SDL_RenderPresent` -
+   reading after present raced the buffer swap and silently
+   screenshotted blank frames the first few tries, worth remembering),
+   pixel-identical to a direct `hWindowDC` dump that bypasses SDL
+   entirely - confirming the SDL plumbing, not just the GDI shim
+   underneath it, is correct.
+
+   Deliberately out of scope for this slice (see the file's own header
+   comment for the reasoning on each): parsing a real `.KML` script via
+   `KML.C`'s `InitKML()` (its code path also touches FILES.C's
+   ROM-loading/patch-checking functions for any skin with a `Rom` line,
+   which `REAL28CL.KML` has - a separate follow-up, not this slice's;
+   this file calls `CreateMainBitmap`/`CreateLcdBitmap` directly
+   instead, with the real skin's `Lcd Zoom 2 / Offset 474 177` values
+   read out of `REAL28C.KMI` by hand); the CPU-emulation worker thread
+   and the real thread/event-sync primitives it needs (still the
+   tagged-`HANDLE` design question flagged above); keyboard/mouse
+   input; window resizing/menus/dialogs (the stub functions in
+   `sdl_main.c` are the minimum needed to satisfy `DISPLAY.C`'s *other*
+   functions, which still get compiled into its object file and still
+   need their symbols to resolve even though this slice never calls
+   them - most are honest no-ops for this architecture, e.g.
+   `InvalidateRect`: the whole frame gets redrawn every loop iteration
+   already, so dirty-rect invalidation has nothing to do here).
+
+   **A real, genuine bug this slice's runtime testing caught that no
+   amount of `-fsyntax-only` checking could have**: `gdi.c`'s
+   `SelectObject` dereferenced its `HGDIOBJ` argument's type tag
+   without a NULL check. `DestroyLcdBitmap()` relies on a standard GDI
+   idiom - stash whatever was selected before, select the new object,
+   later select the stashed handle back in and delete whatever comes
+   back - and on the very first frame (before any contrast change),
+   that stashed handle genuinely is `NULL`, because this shim's fresh
+   DCs start with nothing selected (real GDI always has stock objects
+   pre-selected, so this exact case can't arise there). Every earlier
+   test exercised `BitBlt`/`PatBlt`/compositing but never a full
+   create-then-destroy cycle, so it went uncaught through the whole of
+   milestones 2 and 3 - only surfaced once this slice actually ran the
+   real init/cleanup path end to end, immediately crashing on launch.
+   Fixed by special-casing `SelectObject(hdc, NULL)` as "deselect the
+   current brush," the one real interpretation the vendor code
+   actually relies on (real Win32 leaves the call undefined otherwise
+   anyway). Reinforces the same lesson as milestone 3's `LONG`/`ULONG`
+   and Winsock bugs: compiling clean proves nothing about runtime
+   correctness for code paths a syntax check can't exercise - only
+   actually running it does.
 5. Stub `SETTINGS.C` (registry) to a flat config file, and initially stub
    `SOUND.C`/`SNDENUM.C` entirely (sound isn't needed for the HP-28C
    menu/UI research this project exists to support) rather than porting

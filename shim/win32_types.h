@@ -27,19 +27,15 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-/* PCH.H's own version-guarded fallbacks (the CLL() 64-bit-literal
- * macro, pre-VS2015 typedefs, ...) all key off _MSC_VER. Left
- * undefined, `#if _MSC_VER <= 1200` evaluates as `#if 0 <= 1200` -
- * true - which silently selects PCH.H's *oldest* fallback branches
- * (e.g. the MSVC6-era `i64` integer-literal suffix, which gcc/clang
- * reject outright) instead of skipping them. Claiming a recent MSVC
- * version here makes PCH.H's own guards pick its modern branches,
- * exactly as they would under a current MSVC - without editing
- * PCH.H. The couple of MSVC-only `#pragma comment`/`#pragma warning`
- * lines this newly exposes are silently ignored by gcc/clang. */
-#ifndef _MSC_VER
-#define _MSC_VER 1930
-#endif
+/* NOTE: PCH.H needs _MSC_VER defined (see compat/winsock2.h for why
+ * and the full explanation) - that define deliberately does NOT live
+ * here. This header is included both via PCH.H's vendor-compile path
+ * *and* directly by this project's own new (non-vendor) code, e.g.
+ * the SDL2 platform layer - and third-party headers like SDL.h
+ * genuinely check _MSC_VER to decide whether to pull in real
+ * MSVC-only headers (SDL_stdinc.h's `#include <sal.h>`). Defining it
+ * unconditionally here once broke exactly that for any new file
+ * including this header outside the vendor-compile path. */
 
 #include <assert.h>
 #include <fcntl.h>

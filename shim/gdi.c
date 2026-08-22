@@ -242,7 +242,27 @@ HBITMAP CreateDIBSection(HDC hdc, CONST BITMAPINFO *pbmi, DWORD usage,
 HGDIOBJ SelectObject(HDC hdc, HGDIOBJ h)
 {
 	GdiDC *dc = (GdiDC *)hdc;
-	GdiObjType type = *(GdiObjType *)h;
+	GdiObjType type;
+
+	/* Real GDI always has stock objects pre-selected into a fresh DC
+	 * (a default brush/pen/...), so SelectObject's "previously
+	 * selected object" return is never NULL there. This shim's DCs
+	 * start with nothing selected, so it can be: DISPLAY.C's
+	 * DestroyLcdBitmap() relies on exactly this "swap the old handle
+	 * back in, get the current one back to delete it" idiom for its
+	 * brush, and on the very first frame (before any contrast change)
+	 * that saved "old" handle genuinely is NULL. Deselecting the
+	 * current brush is the only observed real use of
+	 * SelectObject(hdc, NULL) in vendor code, so that's the one
+	 * interpretation handled here - real Win32 leaves the call
+	 * undefined otherwise anyway. */
+	if (h == NULL) {
+		GdiBrush *prev = dc->brush;
+		dc->brush = NULL;
+		return (HGDIOBJ)prev;
+	}
+
+	type = *(GdiObjType *)h;
 
 	switch (type) {
 	case GDI_OBJ_BITMAP: {
