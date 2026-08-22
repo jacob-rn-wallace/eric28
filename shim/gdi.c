@@ -19,13 +19,14 @@
 
 typedef enum {
 	GDI_OBJ_BITMAP,
-	GDI_OBJ_BRUSH
+	GDI_OBJ_BRUSH,
+	GDI_OBJ_PEN
 } GdiObjType;
 
 typedef struct {
 	GdiObjType type; /* always GDI_OBJ_BITMAP; lets SelectObject/
-	                  * DeleteObject tell bitmaps and brushes apart
-	                  * through the same HGDIOBJ. */
+	                  * DeleteObject tell bitmaps, brushes and pens
+	                  * apart through the same HGDIOBJ. */
 	INT   width, height; /* height is always the positive size */
 	BOOL  topDown;        /* row order of the storage below - TRUE:
 	                       * row 0 is the top of the image (what
@@ -37,13 +38,21 @@ typedef struct {
 	                       * because DISPLAY.C pokes a DIB section's
 	                       * returned pointer directly and assumes
 	                       * real GDI's row-order convention). */
-	INT   bpp;             /* 8 or 32 */
-	DWORD *pixels32;        /* bpp == 32 */
-	BYTE  *pixels8;          /* bpp == 8, one byte per pixel, stride
-	                         * == width exactly (no Win32 4-byte row
-	                         * padding) - matches what DISPLAY.C
-	                         * itself assumes of the one 8-bpp DIB
-	                         * section it ever creates. */
+	INT     bpp;             /* 8 or 32 */
+	BOOL    isMonochrome;     /* bpp==8 storage, but interpreted as
+	                          * fixed black(0)/white(1) rather than
+	                          * through `palette` below - what
+	                          * CreateBitmap(...,1,1,NULL) makes.
+	                          * BitBlt applies a real color-reduction
+	                          * rule (see bitmap_get_pixel_for_rop())
+	                          * when writing into one of these. */
+	DWORD  *pixels32;          /* bpp == 32 */
+	BYTE   *pixels8;            /* bpp == 8 (paletted or monochrome),
+	                            * one byte per pixel, stride == width
+	                            * exactly (no Win32 4-byte row
+	                            * padding) - matches what DISPLAY.C
+	                            * itself assumes of the one DIB
+	                            * section it creates this way. */
 	RGBQUAD palette[256];
 	UINT    paletteCount;
 } GdiBitmap;
@@ -54,9 +63,25 @@ typedef struct {
 } GdiBrush;
 
 typedef struct {
+	GdiObjType type; /* always GDI_OBJ_PEN */
+	COLORREF   color;
+} GdiPen;
+
+typedef struct {
 	GdiBitmap *bitmap; /* currently selected bitmap, or NULL */
 	GdiBrush  *brush;   /* currently selected brush, or NULL */
+	GdiPen    *pen;      /* currently selected pen, or NULL */
+	COLORREF   bkColor;   /* SetBkColor - only meaningful as the
+	                       * *source* DC of a BitBlt into a
+	                       * monochrome destination (real GDI's
+	                       * color-reduction rule reads it from
+	                       * there, not from the destination DC) */
+	INT        stretchMode;
+	INT        curX, curY; /* MoveToEx/LineTo current position */
 } GdiDC;
+
+static GdiPen g_stockBlackPen = { GDI_OBJ_PEN, 0x00000000 };
+static GdiPen g_stockWhitePen = { GDI_OBJ_PEN, 0x00FFFFFF };
 
 /* ---- pixel access -------------------------------------------------------------- */
 
@@ -69,8 +94,14 @@ static COLORREF bitmap_get_pixel(CONST GdiBitmap *bmp, INT x, INT y)
 
 	if (bmp->bpp == 8) {
 		BYTE index = bmp->pixels8[(size_t)row * bmp->width + x];
-		CONST RGBQUAD *c = &bmp->palette[index < bmp->paletteCount ? index : 0];
-		return RGB(c->rgbRed, c->rgbGreen, c->rgbBlue);
+
+		if (bmp->isMonochrome)
+			return index ? 0x00FFFFFFu : 0x00000000u;
+
+		{
+			CONST RGBQUAD *c = &bmp->palette[index < bmp->paletteCount ? index : 0];
+			return RGB(c->rgbRed, c->rgbGreen, c->rgbBlue);
+		}
 	}
 	return bmp->pixels32[(size_t)row * bmp->width + x];
 }
@@ -83,13 +114,33 @@ static VOID bitmap_set_pixel(GdiBitmap *bmp, INT x, INT y, COLORREF color)
 		return;
 
 	if (bmp->bpp == 8) {
-		/* Only ever written through DISPLAY.C's own WritePixel*()
-		 * pokes directly into the returned buffer, never through
-		 * BitBlt/PatBlt - but handle it correctly regardless. */
-		bmp->pixels8[(size_t)row * bmp->width + x] = (BYTE)color;
+		/* For the DIB-section mask case, only ever written through
+		 * DISPLAY.C's own WritePixel*() pokes directly into the
+		 * returned buffer, never through BitBlt/PatBlt - but handle
+		 * it correctly regardless. For the monochrome case, this is
+		 * BitBlt's write path after color reduction: any nonzero
+		 * (word-sized "true") result means white/1. */
+		bmp->pixels8[(size_t)row * bmp->width + x] = (color != 0) ? 1 : 0;
 		return;
 	}
 	bmp->pixels32[(size_t)row * bmp->width + x] = color;
+}
+
+/* Real GDI's rule for blitting a color source into a monochrome (1-bpp)
+ * destination: a source pixel becomes destination-white(1) exactly
+ * when it equals the *source* DC's current background color
+ * (SetBkColor), and destination-black(0) otherwise - this is how
+ * KML.C's DrawAnnunciator() turns "everything that isn't the
+ * annunciator's background pixel" into an opaque mask. Only applies
+ * when reading the *source* operand for a BitBlt whose destination is
+ * monochrome; reading a monochrome bitmap as a *source* (the second
+ * half of that same function, blitting the mask back over the window)
+ * uses plain bitmap_get_pixel()'s fixed black/white mapping instead -
+ * no reduction needed, it's already binary. */
+static COLORREF reduce_for_mono_dest(CONST GdiDC *srcDC, INT x, INT y)
+{
+	COLORREF raw = bitmap_get_pixel(srcDC->bitmap, x, y);
+	return ((raw & 0x00FFFFFFu) == (srcDC->bkColor & 0x00FFFFFFu)) ? 0x00FFFFFFu : 0x00000000u;
 }
 
 /* ---- general ternary raster-operation evaluator --------------------------------
@@ -193,14 +244,22 @@ HGDIOBJ SelectObject(HDC hdc, HGDIOBJ h)
 	GdiDC *dc = (GdiDC *)hdc;
 	GdiObjType type = *(GdiObjType *)h;
 
-	if (type == GDI_OBJ_BITMAP) {
+	switch (type) {
+	case GDI_OBJ_BITMAP: {
 		GdiBitmap *prev = dc->bitmap;
 		dc->bitmap = (GdiBitmap *)h;
 		return (HGDIOBJ)prev;
-	} else {
+	}
+	case GDI_OBJ_PEN: {
+		GdiPen *prev = dc->pen;
+		dc->pen = (GdiPen *)h;
+		return (HGDIOBJ)prev;
+	}
+	default: {
 		GdiBrush *prev = dc->brush;
 		dc->brush = (GdiBrush *)h;
 		return (HGDIOBJ)prev;
+	}
 	}
 }
 
@@ -209,6 +268,11 @@ BOOL DeleteObject(HGDIOBJ h)
 	GdiObjType type;
 
 	if (h == NULL)
+		return FALSE;
+
+	/* Real GDI refuses to delete a stock object; ours are static, so
+	 * freeing them would be a crash rather than a harmless no-op. */
+	if (h == &g_stockBlackPen || h == &g_stockWhitePen)
 		return FALSE;
 
 	type = *(GdiObjType *)h;
@@ -266,6 +330,8 @@ BOOL BitBlt(HDC hdcDest, INT xDest, INT yDest, INT w, INT h,
 	GdiDC *dst = (GdiDC *)hdcDest;
 	GdiDC *src = (GdiDC *)hdcSrc;
 	COLORREF patColor = dst->brush ? dst->brush->color : 0;
+	BOOL reduceSrc = dst->bitmap && dst->bitmap->isMonochrome &&
+	                  src && src->bitmap && !src->bitmap->isMonochrome;
 	INT x, y;
 
 	if (dst->bitmap == NULL)
@@ -273,7 +339,44 @@ BOOL BitBlt(HDC hdcDest, INT xDest, INT yDest, INT w, INT h,
 
 	for (y = 0; y < h; ++y) {
 		for (x = 0; x < w; ++x) {
-			COLORREF s = (src && src->bitmap) ? bitmap_get_pixel(src->bitmap, xSrc + x, ySrc + y) : 0;
+			COLORREF s;
+			COLORREF d, result;
+
+			if (src == NULL || src->bitmap == NULL)
+				s = 0;
+			else if (reduceSrc)
+				s = reduce_for_mono_dest(src, xSrc + x, ySrc + y);
+			else
+				s = bitmap_get_pixel(src->bitmap, xSrc + x, ySrc + y);
+
+			d = bitmap_get_pixel(dst->bitmap, xDest + x, yDest + y);
+			result = rop3(rop, patColor, s, d);
+
+			bitmap_set_pixel(dst->bitmap, xDest + x, yDest + y, result);
+		}
+	}
+	return TRUE;
+}
+
+BOOL StretchBlt(HDC hdcDest, INT xDest, INT yDest, INT wDest, INT hDest,
+                 HDC hdcSrc, INT xSrc, INT ySrc, INT wSrc, INT hSrc, DWORD rop)
+{
+	GdiDC *dst = (GdiDC *)hdcDest;
+	GdiDC *src = (GdiDC *)hdcSrc;
+	COLORREF patColor = dst->brush ? dst->brush->color : 0;
+	INT x, y;
+
+	if (dst->bitmap == NULL || wDest == 0 || hDest == 0)
+		return FALSE;
+
+	for (y = 0; y < hDest; ++y) {
+		for (x = 0; x < wDest; ++x) {
+			/* nearest-neighbor: real GDI's HALFTONE/COLORONCOLOR
+			 * quality modes are cosmetic, not needed for a calculator
+			 * skin's occasional resize - see SetStretchBltMode(). */
+			INT sx = xSrc + (INT)((int64_t)x * wSrc / wDest);
+			INT sy = ySrc + (INT)((int64_t)y * hSrc / hDest);
+			COLORREF s = (src && src->bitmap) ? bitmap_get_pixel(src->bitmap, sx, sy) : 0;
 			COLORREF d = bitmap_get_pixel(dst->bitmap, xDest + x, yDest + y);
 			COLORREF result = rop3(rop, patColor, s, d);
 
@@ -309,6 +412,115 @@ BOOL PatBlt(HDC hdc, INT x0, INT y0, INT w, INT h, DWORD rop)
 			bitmap_set_pixel(dc->bitmap, x0 + x, y0 + y, result);
 		}
 	}
+	return TRUE;
+}
+
+HBITMAP CreateBitmap(INT nWidth, INT nHeight, UINT nPlanes, UINT nBitCount, CONST VOID *lpBits)
+{
+	GdiBitmap *bmp;
+
+	if (nWidth <= 0 || nHeight <= 0 || nPlanes != 1 || nBitCount != 1 || lpBits != NULL)
+		return NULL; /* the only shape this shim's caller (KML.C) ever asks for */
+
+	bmp = (GdiBitmap *)calloc(1, sizeof(GdiBitmap));
+	bmp->type = GDI_OBJ_BITMAP;
+	bmp->width = nWidth;
+	bmp->height = nHeight;
+	bmp->topDown = TRUE;
+	bmp->bpp = 8;
+	bmp->isMonochrome = TRUE;
+	bmp->pixels8 = (BYTE *)calloc((size_t)nWidth * nHeight, 1);
+	return (HBITMAP)bmp;
+}
+
+COLORREF SetBkColor(HDC hdc, COLORREF color)
+{
+	GdiDC *dc = (GdiDC *)hdc;
+	COLORREF old = dc->bkColor;
+
+	dc->bkColor = color;
+	return old;
+}
+
+INT SetStretchBltMode(HDC hdc, INT mode)
+{
+	GdiDC *dc = (GdiDC *)hdc;
+	INT old = dc->stretchMode;
+
+	dc->stretchMode = mode; /* stored for round-trip fidelity; StretchBlt is always nearest-neighbor */
+	return old ? old : 1;
+}
+
+HGDIOBJ GetCurrentObject(HDC hdc, UINT type)
+{
+	GdiDC *dc = (GdiDC *)hdc;
+
+	if (type == OBJ_BITMAP)
+		return (HGDIOBJ)dc->bitmap;
+	return NULL;
+}
+
+INT GetObject(HGDIOBJ h, INT c, LPVOID pv)
+{
+	GdiBitmap *bmp = (GdiBitmap *)h;
+	BITMAP *out = (BITMAP *)pv;
+
+	if (h == NULL || bmp->type != GDI_OBJ_BITMAP || (size_t)c < sizeof(BITMAP))
+		return 0;
+
+	out->bmType = 0;
+	out->bmWidth = bmp->width;
+	out->bmHeight = bmp->height;
+	out->bmWidthBytes = (bmp->bpp == 8) ? bmp->width : bmp->width * 4;
+	out->bmPlanes = 1;
+	out->bmBitsPixel = (WORD)bmp->bpp;
+	out->bmBits = NULL;
+	return sizeof(BITMAP);
+}
+
+HGDIOBJ GetStockObject(INT fnObject)
+{
+	return (fnObject == BLACK_PEN) ? (HGDIOBJ)&g_stockBlackPen : (HGDIOBJ)&g_stockWhitePen;
+}
+
+BOOL MoveToEx(HDC hdc, INT x, INT y, LPVOID lpPoint)
+{
+	GdiDC *dc = (GdiDC *)hdc;
+
+	(void)lpPoint; /* never passed non-NULL by this shim's caller */
+	dc->curX = x;
+	dc->curY = y;
+	return TRUE;
+}
+
+BOOL LineTo(HDC hdc, INT x, INT y)
+{
+	GdiDC *dc = (GdiDC *)hdc;
+	COLORREF color = dc->pen ? dc->pen->color : 0;
+	INT x0 = dc->curX, y0 = dc->curY;
+	INT dx = abs(x - x0), dy = -abs(y - y0);
+	INT sx = (x0 < x) ? 1 : -1, sy = (y0 < y) ? 1 : -1;
+	INT err = dx + dy;
+
+	if (dc->bitmap == NULL)
+		return FALSE;
+
+	/* Bresenham; real GDI's LineTo also omits the final pixel (it
+	 * becomes the *next* MoveToEx/LineTo's start), which the loop
+	 * bound below (x0!=x || y0!=y) preserves. */
+	for (;;) {
+		INT e2;
+
+		if (x0 == x && y0 == y)
+			break;
+		bitmap_set_pixel(dc->bitmap, x0, y0, color);
+		e2 = 2 * err;
+		if (e2 >= dy) { err += dy; x0 += sx; }
+		if (e2 <= dx) { err += dx; y0 += sy; }
+	}
+
+	dc->curX = x;
+	dc->curY = y;
 	return TRUE;
 }
 

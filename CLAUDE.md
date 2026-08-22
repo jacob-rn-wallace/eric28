@@ -87,23 +87,26 @@ shim/                    New code only: Win32-type/API compatibility
                          comments for which category each belongs to.
   gdi.h, gdi.c           GDI-drawing shim (milestone 3): a software
                          rasterizer implementing the Win32 GDI subset
-                         DISPLAY.C uses to composite the LCD/
-                         annunciator display - memory device contexts
-                         backed by an owned 32-bpp (or, for the one
-                         DIB-section mask bitmap, 8-bpp paletted)
-                         pixel buffer, BitBlt/PatBlt against them
+                         DISPLAY.C and KML.C use to composite the LCD/
+                         annunciator display and the calculator skin -
+                         memory device contexts backed by an owned
+                         32-bpp (or, for DIB-section/monochrome
+                         bitmaps, 8-bpp paletted or fixed-B&W) pixel
+                         buffer, BitBlt/PatBlt/StretchBlt against them
                          (including a general ternary-ROP evaluator -
-                         see gdi.c's rop3() - so DISPLAY.C's own two
-                         custom ROP hex literals work without this
-                         shim needing to know their names), solid
-                         brushes, and a narrow BMP-file loader (real
-                         device contexts and window-management calls
-                         are NOT here - see win32_types.h's "window
-                         management" section, they need milestone 4's
-                         actual SDL2 window). KML.C needs a superset
-                         of this (StretchBlt, GetObject, CreateBitmap,
-                         plus several window/shell APIs entirely
-                         outside GDI) - not yet attempted.
+                         see gdi.c's rop3() - so the two custom ROP hex
+                         literals DISPLAY.C/KML.C each define work
+                         without this shim needing to know their
+                         names), solid brushes and pens, and a narrow
+                         BMP-file loader (real device contexts and
+                         window-management calls are NOT here - see
+                         win32_types.h's "window management" section,
+                         they need milestone 4's actual SDL2 window).
+                         KML.C's several window/shell/dialog APIs
+                         entirely outside GDI (shell folder browsing,
+                         combo boxes, window messaging, keyboard-layout
+                         queries) are declared-only in win32_types.h
+                         instead - see its own section comments.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -297,13 +300,41 @@ as literal dialogs).
    64 bytes instead of the required 40, corrupting every field offset
    - `sizeof()` mismatches like this produce no compiler warning at
    all. Fixed (now `int32_t`/`uint32_t`); worth remembering if another
-   binary-format struct gets added later. `KML.C` not attempted -
-   needs a larger superset of this same shim (`StretchBlt`,
-   `GetObject`, `CreateBitmap`) plus several entirely different
-   categories (shell folder browsing, `FindFirstFile`-style
-   enumeration, dialog procs, window messaging) that showed up when
-   actually attempting its compile - likely its own milestone-sized
-   piece of work, not a quick extension of this one.
+   binary-format struct gets added later.
+
+   **`KML.C` done too** - turned out smaller than expected once
+   attempted directly. Extended `shim/gdi.h`/`gdi.c` with `StretchBlt`
+   (nearest-neighbor), `GetObject`/`GetCurrentObject`, `SetBkColor`,
+   and solid pens with `MoveToEx`/`LineTo`, plus `CreateBitmap`'s one
+   real use here: building a monochrome (1-bpp) transparency mask for
+   annunciator drawing. That last one needed genuine new logic, not
+   just plumbing - `BitBlt`ing a color source into a monochrome
+   destination applies real GDI's color-reduction rule (a source pixel
+   becomes destination-white exactly when it equals the *source* DC's
+   `SetBkColor`, black otherwise; see gdi.c's `reduce_for_mono_dest()`)
+   - verified by reproducing `DrawAnnunciator()`'s exact algorithm
+   (backdrop-with-glyph → mono mask → re-composite with
+   `ROP_PSDPxax` and an ink color) end to end, numerically
+   spot-checked and dumped to PNG. `StretchBlt` and `LineTo` got the
+   same treatment (checkerboard-scaling and rectangle-border tests).
+   Everything else `KML.C` needed - shell folder browsing
+   (`SHBrowseForFolder`/`SHGetMalloc`/COM-shaped `IMalloc`), combo-box
+   messages, `DialogBoxParam`, window messaging (`SendMessage`,
+   `GetClassLongPtr`, ...), keyboard-layout queries - went into
+   `win32_types.h` as declared-only, same treatment and same reasoning
+   as the dialog/DDE/menu groups from milestone 2's extension: real
+   OS-specific behavior with no macOS/Linux/SDL2 equivalent (shell
+   browsing, DDE) or genuinely dependent on milestone 4's not-yet-built
+   window (messaging, dialogs). `FindFirstFile`/`FindNextFile`/
+   `FindClose`/`GetFileSize`/`SetCurrentDirectory`/`MulDiv` turned out
+   to be real portable-primitive territory (POSIX `opendir`/`readdir`/
+   `fnmatch`, `fstat`, `chdir`, plain arithmetic) and got real
+   implementations instead, same bucket as milestone 2's file-I/O
+   work. All 21 of vendor's non-window/registry/sound files now
+   compile clean (the 19 from milestone 2 plus `DISPLAY.C` and
+   `KML.C`) - `EMU28.C`, `SETTINGS.C`, and the DirectSound/`waveOut`
+   files are the only ones left, and per the table above they're
+   pure window/registry/sound - milestones 4 and 5's job, not GDI's.
 4. SDL2 event loop replacing `EMU28.C`'s window/message-pump section
    (small surface, per the table above) - this is also where the
    thread/event-sync `HANDLE` design decision flagged above belongs

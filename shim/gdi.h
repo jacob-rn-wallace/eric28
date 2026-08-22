@@ -18,10 +18,16 @@
  *   actual SDL2 window (milestone 4) to mean anything, and are
  *   declared-only there.
  *
- *   KML.C needs a superset of this (StretchBlt, GetObject,
- *   CreateBitmap, GetPixel, SetBkColor, plus several window/shell
- *   APIs entirely outside GDI) - not attempted here; see CLAUDE.md's
- *   milestone 3 notes for why this pass scoped down to DISPLAY.C.
+ *   Also covers the GDI superset KML.C needs beyond that:
+ *   StretchBlt (nearest-neighbor), GetObject/GetCurrentObject,
+ *   CreateBitmap's monochrome case (with the real color->monochrome
+ *   reduction rule BitBlt uses when blitting a colour source into a
+ *   1-bpp destination - see bitmap_get_pixel_for_rop() in gdi.c),
+ *   SetBkColor, and solid pens with MoveToEx/LineTo. KML.C's several
+ *   window/shell/dialog APIs entirely outside GDI (shell folder
+ *   browsing, combo boxes, window messaging, ...) are declared-only
+ *   in win32_types.h instead, same treatment as DDE/native dialogs -
+ *   see CLAUDE.md's milestone 3 notes.
  *
  *   Design note: every bitmap this shim creates stores pixels as
  *   packed 32-bit words numerically equal to their COLORREF value
@@ -88,6 +94,19 @@ typedef struct {
 #define BI_RGB         0
 #define DIB_RGB_COLORS 0
 
+typedef struct {
+	LONG   bmType;
+	LONG   bmWidth;
+	LONG   bmHeight;
+	LONG   bmWidthBytes;
+	WORD   bmPlanes;
+	WORD   bmBitsPixel;
+	LPVOID bmBits;
+} BITMAP;
+
+#define OBJ_BITMAP 7
+#define HALFTONE   4
+
 /* Generic GDI object handle - what SelectObject actually traffics in,
  * since a DC can have a bitmap, brush, pen, etc. selected into it.
  * Callers always cast the result back to the concrete handle type
@@ -132,12 +151,33 @@ extern UINT    RealizePalette(HDC hdc);
 extern BOOL BitBlt(HDC hdcDest, INT xDest, INT yDest, INT w, INT h,
                     HDC hdcSrc, INT xSrc, INT ySrc, DWORD rop);
 extern BOOL PatBlt(HDC hdc, INT x, INT y, INT w, INT h, DWORD rop);
+extern BOOL StretchBlt(HDC hdcDest, INT xDest, INT yDest, INT wDest, INT hDest,
+                        HDC hdcSrc, INT xSrc, INT ySrc, INT wSrc, INT hSrc, DWORD rop);
 
-/* Not called by DISPLAY.C (KML.C uses it) - exposed anyway since it's
- * the natural way to read back a composited pixel for verification,
- * and it's a two-line wrapper around the same pixel accessor BitBlt
- * itself uses internally. */
 extern COLORREF GetPixel(HDC hdc, INT x, INT y);
+extern COLORREF SetBkColor(HDC hdc, COLORREF color);
+extern INT      SetStretchBltMode(HDC hdc, INT mode);
+extern HGDIOBJ  GetCurrentObject(HDC hdc, UINT type);
+extern INT      GetObject(HGDIOBJ h, INT c, LPVOID pv);
+
+/* CreateBitmap only supports the one shape KML.C actually asks for:
+ * a fresh, uninitialized 1-bpp (monochrome) bitmap (nPlanes==1,
+ * nBitCount==1, lpBits==NULL) - used as a color->monochrome
+ * conversion target for building an annunciator's transparency mask.
+ * See gdi.c's bitmap_get_pixel_for_rop() for the reduction rule
+ * BitBlt applies when writing into one of these. */
+extern HBITMAP CreateBitmap(INT nWidth, INT nHeight, UINT nPlanes, UINT nBitCount, CONST VOID *lpBits);
+
+/* ---- pens (KML.C's 3-D bevel border around the display) --------------------------- */
+
+typedef void* HPEN;
+
+#define BLACK_PEN 0
+#define WHITE_PEN 1
+
+extern HGDIOBJ GetStockObject(INT fnObject);
+extern BOOL    MoveToEx(HDC hdc, INT x, INT y, LPVOID lpPoint);
+extern BOOL    LineTo(HDC hdc, INT x, INT y);
 
 /* ---- bitmap file loading ---------------------------------------------------------
  * FILES.C's eventual job long-term; a real, narrow implementation

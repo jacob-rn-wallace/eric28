@@ -49,10 +49,15 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <time.h>
 #include <unistd.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <fnmatch.h>
+#include <sys/stat.h>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -575,6 +580,140 @@ static inline DWORD SetFilePointer(HANDLE hFile, LONG lDistanceToMove,
 	return (pos == (off_t)-1) ? INVALID_SET_FILE_POINTER : (DWORD)pos;
 }
 
+static inline DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh)
+{
+	struct stat st;
+
+	if (fstat((int)(intptr_t)hFile, &st) != 0)
+		return INVALID_SET_FILE_POINTER;
+	if (lpFileSizeHigh)
+		*lpFileSizeHigh = (DWORD)((uint64_t)st.st_size >> 32);
+	return (DWORD)st.st_size;
+}
+
+static inline BOOL SetCurrentDirectory(LPCTSTR lpPathName)
+{
+	return chdir(lpPathName) == 0;
+}
+
+/* ---- file enumeration (KML.C's *.KML skin-directory scan) -------------------------
+ * FindFirstFile/FindNextFile's glob-pattern matching maps directly
+ * onto POSIX fnmatch(); only cFileName is populated (the only field
+ * KML.C reads) - the timestamp/attribute fields real Win32 fills in
+ * are zeroed, since nothing here reads them. */
+
+#define FILE_ATTRIBUTE_DIRECTORY 0x00000010u
+
+typedef struct {
+	DWORD dwFileAttributes;
+	DWORD ftCreationTime[2];
+	DWORD ftLastAccessTime[2];
+	DWORD ftLastWriteTime[2];
+	DWORD nFileSizeHigh;
+	DWORD nFileSizeLow;
+	DWORD dwReserved0;
+	DWORD dwReserved1;
+	TCHAR cFileName[260];
+	TCHAR cAlternateFileName[14];
+} WIN32_FIND_DATA, *LPWIN32_FIND_DATA;
+
+typedef struct {
+	DIR   *dir;
+	char   pattern[260];
+} ShimFindHandle;
+
+static inline BOOL shim_find_next(ShimFindHandle *h, LPWIN32_FIND_DATA lpData)
+{
+	struct dirent *de;
+
+	while ((de = readdir(h->dir)) != NULL) {
+		/* Case-sensitive: FNM_CASEFOLD needs different feature-test
+		 * macros on macOS vs. glibc to stay visible under the strict
+		 * _POSIX_C_SOURCE this file sets, and every real .KML skin
+		 * file (see skins/hp28c/) is already uppercase, matching the
+		 * "*.KML" pattern KML.C actually searches for. */
+		if (fnmatch(h->pattern, de->d_name, 0) != 0)
+			continue;
+		memset(lpData, 0, sizeof(*lpData));
+		strncpy(lpData->cFileName, de->d_name, sizeof(lpData->cFileName) - 1);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static inline HANDLE FindFirstFile(LPCTSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData)
+{
+	ShimFindHandle *h = (ShimFindHandle *)calloc(1, sizeof(ShimFindHandle));
+	CONST CHAR *slash = strrchr(lpFileName, '/');
+
+	h->dir = opendir(".");
+	strncpy(h->pattern, slash ? slash + 1 : lpFileName, sizeof(h->pattern) - 1);
+	if (h->dir == NULL || !shim_find_next(h, lpFindFileData)) {
+		if (h->dir)
+			closedir(h->dir);
+		free(h);
+		return INVALID_HANDLE_VALUE;
+	}
+	return (HANDLE)h;
+}
+
+static inline BOOL FindNextFile(HANDLE hFindFile, LPWIN32_FIND_DATA lpFindFileData)
+{
+	return shim_find_next((ShimFindHandle *)hFindFile, lpFindFileData);
+}
+
+static inline BOOL FindClose(HANDLE hFindFile)
+{
+	ShimFindHandle *h = (ShimFindHandle *)hFindFile;
+
+	closedir(h->dir);
+	free(h);
+	return TRUE;
+}
+
+/* ---- small arithmetic/struct helpers (MulDiv, RECT, HRESULT) ----------------------- */
+
+static inline INT MulDiv(INT nNumber, INT nNumerator, INT nDenominator)
+{
+	/* Matches Win32's documented rounding: round the true quotient to
+	 * the nearest integer, .5 away from zero. */
+	int64_t result = (int64_t)nNumber * nNumerator;
+	int64_t half = nDenominator / 2;
+
+	if (nDenominator == 0)
+		return -1;
+	if ((result < 0) != (nDenominator < 0))
+		half = -half;
+	return (INT)((result + half) / nDenominator);
+}
+
+static inline VOID SetRect(LPRECT lprc, INT xLeft, INT yTop, INT xRight, INT yBottom)
+{
+	lprc->left = xLeft;
+	lprc->top = yTop;
+	lprc->right = xRight;
+	lprc->bottom = yBottom;
+}
+
+static inline VOID SetRectEmpty(LPRECT lprc)
+{
+	lprc->left = lprc->top = lprc->right = lprc->bottom = 0;
+}
+
+typedef LONG HRESULT;
+#define SUCCEEDED(hr) ((HRESULT)(hr) >= 0)
+
+/* Standard Win32 LANGID sub-field macros (documented bit layout, not
+ * platform-specific behavior) plus the one KML.C compares against. */
+typedef WORD LANGID;
+#define PRIMARYLANGID(lgid) ((WORD)(lgid) & 0x3ffu)
+#define SUBLANGID(lgid)     ((WORD)(lgid) >> 10)
+#define LANG_NEUTRAL        0x00
+#define SUBLANG_NEUTRAL     0x00
+
+#define _istdigit(c) isdigit((unsigned char)(c))
+typedef unsigned char _TUCHAR;
+
 /* ---- Winsock (UDP.C) ------------------------------------------------------------
  * Winsock's scalar API (socket/htons/inet_addr/gethostbyname) is
  * deliberately BSD-socket-shaped, so those need no renaming at all -
@@ -836,11 +975,98 @@ extern BOOL SetWindowPos(HWND hWnd, HWND hWndInsertAfter, INT X, INT Y, INT cx, 
 extern LONG_PTR GetWindowLongPtr(HWND hWnd, INT nIndex);
 extern BOOL InvalidateRect(HWND hWnd, CONST RECT *lpRect, BOOL bErase);
 extern BOOL SetWindowOrgEx(HDC hdc, INT X, INT Y, LPVOID lpPoint);
+extern INT  SetWindowRgn(HWND hWnd, HRGN hRgn, BOOL bRedraw);
+extern BOOL DestroyWindow(HWND hWnd);
+extern BOOL DragAcceptFiles(HWND hWnd, BOOL fAccept);
+extern LONG_PTR GetClassLongPtr(HWND hWnd, INT nIndex);
+extern HCURSOR SetCursor(HCURSOR hCursor);
+extern LRESULT SendMessage(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
+
+#define GCL_HCURSOR   -12
+#define WM_SYSCOMMAND 0x0112
+#define MK_LBUTTON    0x0001
 
 static inline BOOL IsRectEmpty(CONST RECT *lprc)
 {
 	return lprc->left >= lprc->right || lprc->top >= lprc->bottom;
 }
+
+/* ---- keyboard layout (KML.C's per-locale key mapping) ----------------------------
+ * Reading the OS's active keyboard layout identifier is genuinely
+ * platform-specific (Windows registry-shaped layout IDs have no
+ * macOS/Linux equivalent - SDL2 exposes layout differently, if this
+ * ever gets revisited it'll be through SDL2's keyboard API, not this
+ * string). Declared only. */
+
+#define KL_NAMELENGTH 9
+
+extern BOOL GetKeyboardLayoutName(LPTSTR pwszKLID);
+
+/* ---- dialog UI, continued (KML.C's skin-selection combo box) ---------------------
+ * Combo-box messages are dispatched through SendMessage, which is
+ * itself declared-only above - see win32_types.h's first dialog UI
+ * section for why (CLAUDE.md already rules out literal native
+ * dialogs for this port). Values are the real Win32 constants; only
+ * meaningful once something actually implements SendMessage. */
+
+#define CB_ERR          (-1)
+#define CB_GETCURSEL    0x0147
+#define CB_RESETCONTENT 0x014B
+#define CB_ADDSTRING    0x0143
+#define CB_SETCURSEL    0x014E
+#define CB_GETITEMDATA  0x0150
+#define CB_SETITEMDATA  0x0151
+
+extern INT_PTR DialogBoxParam(HINSTANCE hInstance, LPCTSTR lpTemplateName, HWND hWndParent,
+                               DLGPROC lpDialogFunc, LPARAM dwInitParam);
+extern UINT    GetDlgItemText(HWND hDlg, INT nIDDlgItem, LPTSTR lpString, INT cchMax);
+extern BOOL    SetDlgItemText(HWND hDlg, INT nIDDlgItem, LPCTSTR lpString);
+
+/* ---- shell folder browsing (KML.C's "choose a skin folder" dialog) ---------------
+ * The Shell "browse for folder" dialog and its COM-flavored support
+ * types (IMalloc, ITEMIDLIST) have no macOS/Linux equivalent and
+ * nothing in SDL2 replaces them - like DDE and native dialogs, this
+ * may simply never get a real implementation in this port. Declared
+ * only so KML.C type-checks as a unit. */
+
+typedef VOID* LPITEMIDLIST;
+
+/* IMalloc is a COM interface (a vtable-pointer struct) in real Win32;
+ * KML.C calls two of its methods through `->lpVtbl->`. Shaped to match
+ * that call syntax so it type-checks - never actually invoked, since
+ * SHGetMalloc (the only thing that could produce a real instance) is
+ * declared-only, same as the rest of this shell-browsing group. */
+typedef struct IMallocVtbl {
+	VOID (*Free)(VOID *pThis, LPVOID pv);
+	VOID (*Release)(VOID *pThis);
+} IMallocVtbl;
+
+typedef struct {
+	CONST IMallocVtbl *lpVtbl;
+} IMalloc, *LPMALLOC;
+
+typedef struct {
+	HWND    hwndOwner;
+	LPVOID  pidlRoot;
+	LPTSTR  pszDisplayName;
+	LPCTSTR lpszTitle;
+	UINT    ulFlags;
+	LPVOID  lpfn;
+	LPARAM  lParam;
+	INT     iImage;
+} BROWSEINFO, *LPBROWSEINFO;
+
+#define BIF_RETURNONLYFSDIRS 0x0001
+#define BIF_STATUSTEXT       0x0004
+
+#define BFFM_INITIALIZED    1
+#define BFFM_SELCHANGED     2
+#define BFFM_SETSTATUSTEXT  (0x0400 + 100)
+#define BFFM_SETSELECTION   (0x0400 + 102)
+
+extern LPITEMIDLIST SHBrowseForFolder(LPBROWSEINFO lpbi);
+extern HRESULT       SHGetMalloc(LPMALLOC *ppMalloc);
+extern BOOL           SHGetPathFromIDList(LPITEMIDLIST pidl, LPTSTR pszPath);
 
 #ifdef __cplusplus
 }
