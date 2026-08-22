@@ -132,6 +132,19 @@ shim/                    New code only: Win32-type/API compatibility
                          SetFilePointer/GetFileSize) moved here from
                          win32_types.h once CloseHandle needed to
                          dispatch across all three kinds together.
+  ini_file.h,            Real GetPrivateProfileString/
+  ini_file.c             GetPrivateProfileInt/WritePrivateProfileString
+                         (milestone 5) - SETTINGS.C's own default
+                         build already uses these instead of the
+                         registry, so this is a portable INI-file
+                         reader/writer, not a registry-replacement
+                         design.
+  sound_stub.c           Silent no-op bodies (milestone 5) for
+                         SoundOut/SoundOpen/.../SetSoundDeviceList -
+                         needed so a full link succeeds (OPCODES.C's
+                         beeper opcode calls SoundOut unconditionally),
+                         since SOUND.C/SNDENUM.C (DirectSound/waveOut)
+                         are still out of scope entirely.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -461,10 +474,37 @@ as literal dialogs).
    `WorkerThread` from `sdl_main.c` - see the milestone 4 note above on
    why that's blocked on FILES.C/ROM loading to be useful, not on
    anything in this primitive layer.
-5. Stub `SETTINGS.C` (registry) to a flat config file, and initially stub
-   `SOUND.C`/`SNDENUM.C` entirely (sound isn't needed for the HP-28C
-   menu/UI research this project exists to support) rather than porting
-   DirectSound - revisit only if sound turns out to matter.
+5. ~~Stub `SETTINGS.C` (registry) to a flat config file~~ - done, and
+   turned out simpler than the milestone name suggests: `SETTINGS.C`'s
+   own `#if !defined REGISTRY` split (`REGISTRY` is commented out, so
+   this is the branch that actually compiles) already avoids the
+   registry in favor of Win32's INI-file API
+   (`GetPrivateProfileString`/`GetPrivateProfileInt`/
+   `WritePrivateProfileString`, against a plain `Emu28.ini`) - no
+   registry-emulation design needed, just real portable bodies for
+   those three functions. `shim/ini_file.h`/`.c` parses the whole file
+   into sections/key=value pairs on every read, applies the read or
+   write, and (for writes) rewrites the whole file - appropriate for a
+   settings file touched a few dozen times at startup/exit, not a hot
+   path. `SETTINGS.C` compiles completely clean against it (zero
+   warnings). Verified with a real file-persistence test, not just API
+   surface: string/int values written then read back through a *fresh*
+   parse of the file (proving persistence, not an in-memory echo),
+   overwriting an existing key updates rather than duplicates it,
+   deleting one key leaves its section siblings intact, and
+   section/key matching is case-insensitive (matching real Win32).
+
+   ~~initially stub `SOUND.C`/`SNDENUM.C` entirely~~ - done:
+   `shim/sound_stub.c` gives `SoundOut`/`SoundOpen`/`SoundClose`/
+   `SoundAvailable`/`SoundGetDeviceID`/`SoundBeep`/
+   `SetSoundDeviceList` silent no-op bodies (not declared-only
+   externs like win32_types.h's out-of-scope categories - OPCODES.C's
+   beeper opcode handler calls `SoundOut` unconditionally, so *some*
+   definition has to exist for a full link to succeed). `SOUND.C`/
+   `SNDENUM.C` themselves are still never compiled - this project
+   still isn't porting DirectSound/waveOut, sound still isn't needed
+   for the HP-28C menu/UI research this project exists to support -
+   revisit only if that changes.
 6. `STEGANO.C` (steganographic ROM-in-PNG loading, GDI-touching per the
    table above) - likely lowest priority; confirm it's not on the
    critical path for basic emulator bring-up before spending any time on
