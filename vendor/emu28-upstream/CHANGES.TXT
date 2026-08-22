@@ -1,0 +1,3061 @@
+Emu28 v1.39
+
+DEBUGGER.C
+- bugfix in function GetAddr() and NewValue(), _istxdigit() thrown
+  an assertion on negative input values
+- changed function OnFindOK(), also accept symbolic address instead
+  of HEX number as search pattern
+
+EMU28.C
+- bugfix in function Disasm(), _istxdigit() thrown an assertion on
+  negative input values
+
+EMU28.RC
+- changed version and copyright
+
+KML.C
+- bugfix in function ParseInteger() and Lex(), _istdigit() thrown an
+  assertion on negative input values
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20250506 with
+  unmarked typecast patches for VS2005 x64 compatibility, Copyright
+  (c) 2005-2025 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20250506
+
+STACK.C
+- changed function GetClpbrdDecimalPoint(), added case of multiple
+  thousand separator and none decimal point
+
+
+Emu28 v1.38
+
+DEBUGGER.C
+- changed position of debugger window with a default position marker
+- changed function Debugger(), in case WM_INITDIALOG set windows
+  position only if given windows position don't contain the default
+  position marker
+- changed function OnToolDebug(), on dialog creation set main window
+  as parent window
+- changed function LoadMemData() and SaveMemData(), changed function
+  prototype by adding a bit mode flag to load or save data in 8-bit
+  or 4-bit mode
+- changed function DebugMemLoad() and DebugMemSave(), added decoding
+  of radio buttons and adjusted to new prototypes of function
+  LoadMemData() and SaveMemData()
+
+DISRPL.C
+- changed function DoArry(), added UNREFERENCED_PARAMETER statement
+- changed table ObjDecode[], added braces around each table element
+  for Clang compatibility
+
+EMU28.C
+- bugfix in function WinMain(), changed UNICODE command line
+  argument decoding to prevent memory leak and added WSAStartup() /
+  WSACleanup() network stack sequence calling once
+
+EMU28.H
+- extern declaration of global variable
+
+EMU28.RC
+- changed IDD_DEBUG_MEMSAVE and IDD_DEBUG_MEMLOAD, added radio
+  buttons to select bit width of memory files
+- changed version and copyright
+
+FILES.C
+- changed function MapRomBmp(), added error handling for memory
+  allocation failed
+- changed function UnmapRom(), removed check for ROM NULL pointer
+- changed function DecodeGif(), ignore pixel aspect ratio setting
+  instead of returning a decoding error
+- changed function DecodePng(), removed NULL pointer check for
+  freeing allocated PNG image data
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20230410 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2023 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20230410
+
+RESOURCE.H
+- added definitions
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+ "LocaleDecimalPoint" in section [Emulator] in the INI-File
+
+STACK.C
+- added variable bLocaleDecimalPoint for choosing the decimal point
+  given by the calculator or the Windows Locale setting
+- added function CheckThousandGroup(), check if character is the
+  thousand separator
+- added function GetClpbrdDecimalPoint(), get decimal point from
+  clipboard
+- changed function SetBcd(), accept number string with thousand
+  separator now
+- added function GetClpbrdRadix(), get radix mark from clipboard
+- changed function GetRadix(), added possibility of using the
+  Windows Locale instead of calculator setting
+- changed function OnStackPaste(), get decimal point for real and
+  complex numbers from clipboard instead from calculator
+
+UDP.C
+- changed function SendByteUdp(), moved WSAStartup() / WSACleanup()
+  sequence to function WinMain()
+
+
+Emu28 v1.37
+
+DISPLAY.C
+- changed function CreateLcdBitmap(), call function
+  CreateAnnunBitmapFromMain() to create a pure B&W annunciator
+  bitmap
+- added new function CreateAnnunBitmapFromMain(), create a B&W
+  annunciator bitmap from background bitmap
+
+DISRPL.C
+- changed function PutSn(), BINx(), DoSemiStream(),
+  RplDecodeObject() and RplCreateObjView(), added error handling for
+  memory allocation failed
+
+EMU28.C
+- changed function WinMain(), added disable of TIMER_RESOLUTION
+  throttling for Windows 11 and added a more flexible CPU binding
+  for the Saturn core emulation thread on Windows Vista and later
+  with function GetCurrentProcessorNumber()
+
+EMU28.DSP
+- added pngcrc.c sources
+- added "LODEPNG_NO_COMPILE_CRC" to lodepng.c definitions
+
+EMU28.H
+- extern declaration of global function
+
+EMU28.RC
+- changed version and copyright
+
+FILES.C
+- renamed pbySignature[] to bySignature[] and defined signature as
+  constant
+- added function UnpackRom(), subroutine for unpacking ROM image
+- changed function MapRom() and MapRomBmp(), speed optimization
+  unpacking ROM image using UnpackRom()
+- changed function NewDocument(), SaveBackup(), RestoreBackup() and
+  CreateRgnFromBitmap(), added error handling for memory allocation
+  failed
+- changed function OpenDocument(), simplified file signature check
+- changed function SaveDocument(), adjusted to bySignature[]
+
+KML.C
+- made pAnnunciator variable public
+- changed function AddToLog(), optimized implementation
+- changed function DestroyKmlList(), minor optimization
+- changed function CreateKmlList(), added error handling for memory
+  allocation failed
+- changed function ParseString(), optimized memory allocation and
+  added error handling for memory allocation failed
+- changed function ParseLine(), ParseLines() and ParseBlock(),
+  added error handling for memory allocation failed
+
+KML.H
+- added extern declaration of variable pAnnunciator
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20230410 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2023 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20230410
+
+PCH.H
+- added definitions, emum and struct for calling function
+  SetProcessInformation()
+
+PNGCRC.C
+- new module for generating the PNG CRC32 replacing the CRC
+  generation in LODEPNG.C
+
+UDP.C
+- replaced static IN_ADDR by SOCKADDR_IN structure
+- changed function ResetUdp(), invalidate IP address inside
+  SOCKADDR_IN structure
+- changed function SendByteUdp(), replaced local SOCKADDR_IN
+  by the global static SOCKADDR_IN structure
+
+
+Emu28 v1.36
+
+DISPNUM.C
+- new module for decoding text in the LCD, non displayable
+  characters are shown as MIDDLE DOT U+00B7 now
+
+EMU28.C
+- changed function SaveChanges(), added document name to MRU list
+- changed function OnFileMruOpen(), modified implementation taking
+  care of the SaveChanges() modification adding a filename to the
+  MRU list after saving a document
+- changed function OnViewCopy(), get display text now
+
+EMU28.DSP
+- added dispnum.c sources
+
+EMU28.H
+- changed function prototype
+- extern declaration of global functions
+
+EMU28.RC
+- changed version and copyright
+
+FILES.C
+- changed function DibNumColors(), CreateBIPalette() and
+  DecodeBmp(), marked BITMAPINFOHEADER pointer as unaligned
+- changed function CreateBIPalette() and DecodeBmp(), minor
+  optimization at input data check
+- changed function DecodePng(), simplified destination row pointer
+  calculation in main loop and removed dead code in function
+  cleanup
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20220109 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2022 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20220109
+
+MRU.C
+- added some remarks
+- added function MruID(), return ID of the given entry
+- changed function MruFilename(), changed function interface writing
+  found filename into a buffer instead of returning a pointer to the
+  filename
+
+PCH.H
+- added CLL macro
+- added __unaligned definition for MSVC6.0 SDK and earlier
+
+STEGANO.C
+- added support for 3 bit/byte encode/decode
+- added function CodingLength(), calculate the number of necessary
+  pixel channels to encode the input data with a given bit/byte
+  setting
+- bugfix in function SteganoDecodeDib(), bitmap size check was
+  incomplete, so a buffer overrun was possible
+
+STEGANO.H
+- added config for disabling 3bit/byte encoding
+
+
+Emu28 v1.35
+
+DEBUGGER.C
+- bugfix in function EnterBreakpoint(), returned an uninitialized
+  address value on empty breakpoint edit control
+- bugfix in function OnDrawBreakWnd(), modified implementation and
+  fixed background color of highlighted selection
+
+DISASM.C
+- bugfix in function disasm_1() and disasm_8(), fixed decoding of
+  r=ss, ss=r and rssEX with ss = 5, 6, 7, D, E or F register select
+
+EMU28.C
+- changed function OnContextMenu(), when the context menu was
+  generated from the keyboard it opened at a fix position, now when
+  the mouse cursor position is inside the client window, at the
+  mouse cursor position
+
+EMU28.RC
+- changed version and copyright
+
+ENGINE.C
+- changed function InitAdjustSpeed(), added critical section for
+  writing reference CPU cycles and reference time
+- bugfix in function AdjKeySpeed() and SetSpeed(), removed critical
+  section handling for initializing CPU slow down, because this
+  section is locked when the CPU emulation thread already slow down
+  the CPU speed
+
+FETCH.C
+- bugfix in table o81Af2_, o81Af1_ and o81Af0_, replaced o_invalid6
+  function pointers by their corresponding opcode function
+- bugfix in table o12_, o11_ and o10_, replaced o_invalid3 function
+  pointers by their corresponding opcode function
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20210627 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2021 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20210627
+
+MOPS.C
+- bugfix in function ReadTAcc(), moved critical section because
+  InitAdjustSpeed() part is already protected
+
+SOUND.C
+- bugfix in function SoundOut(), removed critical section handling
+  because InitAdjustSpeed() is already protected
+
+
+Emu28 v1.34
+
+DISPLAY.C
+- changed function UpdateContrast() and StartDisplay(), changed call
+  of function UpdateAnnunciators() updating all annunciators
+- changed function UpdateAnnunciators(), changed function prototype
+  with an additional argument to get information which annunciators
+  have changed, so only the annunciators which have changed are
+  redrawn now
+
+EMU28.C
+- changed function OnPaint(), changed call of function
+  UpdateAnnunciators() updating all annunciators
+
+EMU28.DSP
+- added stegano.c and stegano.h sources
+- added "LODEPNG_NO_COMPILE_ALLOCATORS" to lodepng.c definitions
+- removed external.c sources
+
+EMU28.H
+- changed function prototype
+- extern declaration of global function
+- removed extern declaration of global function
+
+EMU28.RC
+- changed version and copyright
+
+ENGINE.C
+- changed function WorkerThread(), changed call of function
+  UpdateAnnunciators() updating all annunciators
+
+EXTERNAL.C
+- file deleted
+
+FETCH.C
+- changed table o81B_, removed 1LK7 changes because table has no
+  1LK7 related opcodes any more
+- changed table o81_, replaced beep patch opcode o81B_ by
+  o_invalid3, so table o81B_ isn't used any more
+
+FILES.C
+- added lodepng allocator functions lodepng_malloc(),
+  lodepng_realloc() and lodepng_free()
+- added function MapRomBmp(), loading a ROM image from stenographic
+  bitmaps with uncompressing
+- changed function OpenDocument(), when KML script file name is
+  longer than the file buffer, skip the name heading until the name
+  remainder fits into the buffer, this cause a KML script error with
+  the selection of a new KML script instead of a general document
+  file read error before
+- changed function GetOpenFilename() and GetSaveAsFilename(),
+  expanded HP28C file extension select with *.e28c and use this file
+  extension as default for saving now
+
+KML.C
+- bugfix in function ParseLines() and ParseBlocks(), if loading of
+  an include file failed the KML script line number at the error
+  message was wrong
+- changed function InitGlobal(), added possibility of ROM image
+  loading from stenographic bitmaps in TOK_ROM and TOK_BITMAP block
+- changed function KillKML(), added preset of global variable
+- changed function InitKML(), changed warning to error at ROM beep
+  patch detection
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20200306 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2020 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20200306
+
+MOPS.C
+- changed function WriteSlaveIO(), the annunciator access variable
+  now contain bit coded the annunciators which have changed and is
+  the argument for the modified UpdateAnnunciators() function
+
+OPCODES.C
+- removed function o81B1() as part of the beep patch
+
+OPCODES.H
+- removed extern declaration of function o81B1()
+
+PCH.H
+- added definitions to disable stegano disk interface and stegano
+  encoder
+
+STEGANO.C
+STEGANO.H
+- new modules to encode/decode data in bitmap images
+
+TYPES.H
+- changed structure CHIPSET, moved variable bShutdnWake behind
+  variable cycles so that cycles has a QWORD alignment necessary for
+  _USRDLL definition set else the definition destroy the state file
+  structure
+
+
+Emu28 v1.33
+
+DEBUGGER.C
+- added enum type, static variables and static function prototypes
+  for trace implementation
+- removed all occurrences of UNREFERENCED_PARAMETER(wParam);
+- changed function NotifyDebugger(), added flush trace buffer
+- changed function Debugger(), added trace implementation in case
+  WM_INITDIALOG, WM_DESTROY and WM_COMMAND
+- added functions StartTrace(), StopTrace(), FlushTrace(),
+  PrintTrace(), OutTrace(), OnBrowseTraceSettings(),
+  TraceSettings(), OnTraceSettings() and OnTraceEnable() for trace
+  implementation
+
+DISPLAY.C
+- changed function CreateMainBitmap(), changed LoadBitmapFile()
+  function call loading a bitmap with realizing a palette
+- changed function CreateAnnunBitmap(), changed LoadBitmapFile()
+  function call loading a bitmap without realizing a palette
+- added function SetAnnunBitmap(), setting a created annunciator
+  bitmap
+
+EMU28.C
+- added variable bMouseButton saving if mouse button was pressed
+  when mouse cursor was inside a virtual button hit area
+- removed function OnNcHitTest(), replaced by additional
+  OnLButtonDown() implementation
+- changed function OnLButtonDown(), added part for windows movement
+  when having no title bar prior done over the WM_NCHITTEST message
+  handler which caused side effects
+- changed function OnLButtonUp() and OnKeyDown(), added reset of
+  variable bMouseButton
+- changed function MainWndProc(), added WM_ENDSESSION handler for
+  document saving, WM_CONTEXTMENU calls the context menu only when
+  the right mouse button was not pressed over a virtual button hit
+  area before, removed the WM_NCRBUTTONUP case and removed the
+  WM_NCHITTEST message handler
+
+EMU28.DSP
+- added definition for lodepng.c
+
+EMU28.H
+- changed function prototype
+- extern declaration of global functions
+
+EMU28.RC
+- added dialog IDD_TRACE
+- changed menu IDR_DEBUG, added ID_TRACE_SETTINGS and
+  ID_TRACE_ENABLE menu items
+- changed version and copyright
+
+ENGINE.C
+- changed function Debugger(), added function fnOutTrace() call
+
+FILES.C
+- added function CheckForBeepPatch() looking for ROM beep patches at
+  known positions
+- bugfix in function NewDocument(), initialize the ROM fingerprint
+  after loading the KML script
+- changed function DecodeBmp(), DecodeGif(), DecodePng() and
+  LoadBitmapFile(), changed function prototype by adding an argument
+  if a palette should realized
+
+KML.C
+- changed function ResizeMainBitmap(), added annunciator resize
+  handling for annunciator definitions inside main bitmap
+- changed function InitKML(), added warning for ROM beep patches
+
+LODEPNG.C
+- changed implementation file to LodePNG version 20190824 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2019 Lode Vandevenne
+
+LODEPNG.H
+- changed header file to LodePNG version 20190824
+
+RESOURCE.H
+- added definitions
+
+
+Emu28 v1.32
+
+DISRPL.C
+- changed function DoHexStream() and DoHxs(), removed trailing space
+  if data length is zero
+- bugfix in function DoIntStream(), =DOINT stream with zero data
+  length crashed decoder
+
+EMU28.C
+- bugfix in function OnViewCopy(), fixed unsynchronized GDI
+  operation
+
+EMU28.DSP
+- added lodepng.h and lodepng.c sources
+
+EMU28.RC
+- changed version and copyright
+
+FILES.C
+- changed function GetSaveObjectFilename(), changed function
+  behavior with file extensions; the old implementation added the
+  default extension always when the file had no extension or the
+  given extension wasn't in the file filter list, the actual
+  implementation adds the default extension for the case of no
+  extension only
+- added function DecodePng() as wrapper for decoding PNG image files
+- changed function LoadBitmapFile(), added PNG image file support
+- added function EncodeColorBits() returning bitfield position
+  encoded color bits
+- bugfix in function CreateRgnFromBitmap(), removed GetObject() call
+  for getting the image properties, they are get over a GetDIBits()
+  query now, removed creating a memory DC because it's unused and
+  added bitfield decoding which is important for the 16 bit (5:6:5)
+  color setting
+
+KML.C
+- changed function AdjustPixel(), changed function prototype using
+  a buffer position instead of device context pixel coordinate to
+  locate the adjustable pixel
+- changed function TransparentCircle(), complete new implementation
+  with changed function prototype; the prior implementation used the
+  GetPixel()/SetPixel() method to adjust the pixel color of a single
+  pixel, this method was extremely slow on some PC configurations,
+  the current method is creating a byte copy of the complete target
+  area, does the pixel adjustments on byte level and finally copy
+  the result back to the target device context
+- changed function DrawButton(), adjusted implementation to new
+  prototype of function TransparentCircle()
+- bugfix in function DrawAnnunciator(), used wrong device context on
+  external annunciator bitmap for getting background pixel color
+  (buggy implementation only worked with external bitmaps having a
+  white background color)
+
+LODEPNG.C
+- new module for decoding PNG files LodePNG version 20180611 with
+  unmarked typecast patches for x64 compatibility, Copyright (c)
+  2005-2018 Lode Vandevenne
+
+LODEPNG.H
+- header file for decoding PNG files LodePNG version 20180611,
+  Copyright (c) 2005-2018 Lode Vandevenne
+
+
+Emu28 v1.31
+
+DEBUGGER.C
+- changed function UpdateStackWnd(), OnStackPush() and OnStackPop(),
+  fixed signed/unsigned mismatch
+- changed function UpdateProfileWnd(), fixed signed/unsigned
+  mismatch and optimized ENG unit search break
+
+DISPLAY.C
+- added function CreateAnnunBitmap() and DestroyAnnunBitmap(),
+  handle a separate annunciator bitmap
+- changed function WritePixelDWORD(), WritePixelWORD() and
+  WritePixelBYTE(), changed order of operands to enable constant
+  folding of compiler
+- bugfix in function ResizeWindow(), added Critical Section for GDI
+  access
+
+EMU28.H
+- changed window style for disabled title bar, added system menu
+  with minimize in task bar
+- extern declaration of global variable and functions
+
+EMU28.RC
+- changed IDD_CHOOSEKML, enlarged width of dialog to get an enlarged
+  "Current KML Script" combo box
+- changed IDD_KMLLOG, enlarged width of "Title of the Script", "by"
+  and "The Author" text boxes
+- changed version and copyright
+
+FILES.C
+- changed function NewDocument(), removed SetWindowLocation() call
+  in restore case because on a valid document the window position
+  was already restored in function RestoreBackup()
+- added function LoadIconFromFile(), load icon file and activate the
+  icons
+- added function LoadIconDefault(), activate the window class
+  default icons
+
+KML.C
+- added keyword "Opaque", "Scale" and "Icon" to pLexToken[] table
+- changed function InitGlobal(), added implementation of keyword
+  "Scale" and "Icon"
+- changed function InitLcd(), added implementation of keyword
+  "Bitmap"
+- changed function InitAnnunciator(), added implementation of
+  keyword "Opaque"
+- changed function KillKML(), added LoadIconDefault() to disable
+  custom icons, added DestroyAnnunBitmap() and preset of some global
+  variables
+- changed function DrawAnnunciator(), added alternative annunciator
+  bitmap and opaque bitmap drawing
+- added function ResizeMainBitmap(), resize main bitmap and main
+  bitmap dependend variables like size, offset, ...
+- changed function InitKML(), added scaling main bitmap
+
+KML.H
+- added TOK_OPAQUE, TOK_SCALE and TOK_ICON definition
+- added bOpaque in KmlAnnunciator structure
+
+MOPS.C
+- bugfix in function MapNCE() and MapEXT(), map only free memory
+  pages
+- changed function MapROM(), masking the ROM size with 0xFFFFF is
+  not necessary
+- changed function Map(), changed mapping order because of mapping
+  free memory pages only now
+- changed function NreadEx(), removed conditional jump for speed
+  optimization
+
+
+Emu28 v1.30
+
+DDESERV.C
+- bugfix in function DdeCallback(), improved input data checking and
+  avoided multiple DDE data fetch in XTYP_POKE case
+
+DEBUGGER.C
+- bugfix in function OnLButtonUp(), fixed a buffer overflow when
+  converting a 3 byte hexadecimal string to variable Chipset.out
+  which overwrite the content of variable Chipset.in and fixed a
+  buffer overflow when converting a 4 byte hexadecimal string to
+  variable Chipset.in which overwrite the following two padding
+  bytes
+
+DISPLAY.C
+- bugfix in function ResizeWindow(), the WM_PAINT message wasn't
+  generated by the InvalidateRect() call when the title and menu bar
+  was disabled and the client area was empty, so we got a main
+  window with zero size which could not be activated any more ->
+  issue solved by forcing a menu bar when client area is empty
+
+DISRPL.C
+- changed function PutSn(), minor optimization
+- changed function DoHexStream(), DoIntStream(), DoBint(), DoReal(),
+  DoERel(), DoCmp(), DoECmp(), DoChar(), DoCStr(), DoHxs(),
+  DoIdnt(), DoLam(), DoRomp(), Semi() and DoFlashPtr(), added
+  UNREFERENCED_PARAMETER statement
+- changed function DoERel(), made function static
+- changed function Getfp(), fixed signed/unsigned mismatch
+
+EMU28.C
+- changed szLicence string, updated to the latest revision of the
+  GPLv2
+- moved function SetSoundDeviceList() to SNDENUM.C
+
+EMU28.DSP
+- added snddef.h and sndenum.c sources
+
+EMU28.H
+- extern declaration of global function
+
+EMU28.RC
+- changed IDD_SETTINGS, removed text "Device" and enlarged width of
+  combo box IDC_SOUND_DEVICE
+- changed version and copyright
+
+EXTERNAL.C
+- removed include io.h
+
+FETCH.C
+- added typecast to all pLnk entries for compatibility with C++
+  compiling on GCC 4.8.1
+
+FILES.C
+- changed function OpenDocument(), removed switcher for document
+  format version
+
+KML.C
+- changed function iSqrt(), changed implementation to Heron's method
+  for speed optimization
+
+REDEYE.C
+- changed function CreateCorrectionBits(), fixed signed/unsigned
+  mismatch
+
+SNDDEF.H
+- include files and interface definitions for SNDENUM.C for
+  compilers without installed DirectX SDK
+
+SNDENUM.C
+- new module with implementation of function SetSoundDeviceList()
+  prior located in EMU48.C for sound device enumeration showing the
+  full device name used since Windows Vista
+
+STACK.C
+- removed include resource.h
+- changed function SetBcd(), fixed signed/unsigned mismatch
+- bugfix in function RPL_GetComplex(), function arguments nMantLen
+  and nExpLen hadn't been used
+
+TIMER.C
+- removed include ops.h
+
+
+Emu28 v1.29
+
+DEBUGGER.C
+- bugfix in function OnContextMenu(), when the context menu was
+  generated from the keyboard it was opened at the wrong position
+- bugfix in function Debugger(), use critical section for secure
+  deletion of the last instruction buffer
+
+DISPLAY.C
+- changed function CreateMainBitmap(), removed unreferenced variable
+  in release mode
+- changed function ResizeWindow(), optimized implementation now
+  works independent from window style and menu bar setting
+
+EMU28.C
+- added global variable dwTColor and dwTColorTol for the background
+  transparency color matching
+- added global variable hRgn to hold a region resource handle for
+  a transparent background bitmap
+- added global variables bTitleBar, bShowTitle, bShowMenu and
+  bClientWinMove
+- added Critical Section initialization
+- added function UpdateWindowBars(), helper function to update state
+  of title and menu bar
+- changed function SettingsProc(), added "Show Title" and
+  "Show Menu" checkbox handling
+- changed function OnPaint(), added UpdateWindowBars() call
+- changed function OnInitMenu(), added MRU list update
+- added function OnContextMenu(), context menu implementation
+- added function OnNcHitTest(), when no title bar check if mouse
+  position is in client not over a button area
+- changed function MainWndProc(), minor change in WM_PALETTECHANGED
+  implementation and added WM_CONTEXTMENU, WM_NCRBUTTONUP and
+  WM_NCHITTEST message handler
+- changed function WinMain(), changed method of memory leak
+  detection by adding _CrtSetDbgFlag() at begin and removing
+  _CrtDumpMemoryLeaks() at end of program
+
+EMU28.H
+- added window styles definition
+- changed function prototypes
+- extern declaration of global variables and function
+
+EMU28.RC
+- changed IDD_SETTINGS, added "Show Title" and "Show Menu" checkbox
+- added menu IDM_MENU
+- changed version and copyright
+
+ENGINE.C
+- bugfix in function SaveInstrAddr(), added critical section to be
+  sure that last instruction buffer is still available
+
+FILES.C
+- defined abs() and labs() as intrinsic
+- changed function DecodeGif(), changed function prototype by adding
+  an argument overwritten by the transparent color if found
+- changed function LoadBitmapFile(), adjusted to new prototype of
+  function DecodeGif()
+- added function AbsColorCmp() and LabColorCmp(), compare colors
+  with tolerance
+- added function CreateRgnFromBitmap(), create opaque bitmap region
+
+KML.C
+- added keyword "SysItem" to pLexToken[] table
+- changed function InitGlobal(), added implementation of keyword
+  "Color"
+- changed function RunLine(), added implementation of keyword
+  "SysItem"
+- changed function KillKML(), added reset of variables hRgn,
+  dwTColor and dwTColorTol
+- added function MouseIsButton() to check if mouse over button area
+- changed function MouseMovesTo(), changed _ASSERT implementation to
+  make sure that class cursor is NULL and use function
+  MouseIsButton() to select cursor type now
+
+KML.H
+- added TOK_SYSITEM definition
+- changed structure KmlToken, replaced TCHAR array szName[20] with
+  LPCTSTR szName pointer
+- added MouseIsButton() function prototype
+
+MRU.C
+- changed all function argument types from INT to UINT
+- removed global variables hMruMenu and nMruPos
+- removed all update menu calls in this module and made functions
+  robust against non initialized MRU list and ID index out of range
+- changed function GetMenuPosForId(), changed function prototype so
+  the resulting menu handle and menu position aren't global
+  variables any more
+- changed function MruInit(), changed return value from FALSE to
+  TRUE for success and changed implementation like used in the PPC
+  emulator variants
+- changed function MruUpdateMenu(), changed function prototype by
+  adding the HMENU argument for updating the selected menu and added
+  initialization prior done in function MruInit()
+- changed function MruWriteList(), if there are no entries don't
+  write the "FileCount" setting any more
+
+PCH.H
+- added _WINSOCK_DEPRECATED_NO_WARNINGS definition
+- added GCLP_HCURSOR, SetClassLongPtr, GetClassLongPtr and ULONG_PTR
+  definitions for MSVC6.0 SDK and earlier
+
+RESOURCE.H
+- added definitions
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+ "ShowTitle", "ShowMenu" and "ClientWinMove" in section [Emulator]
+ in the INI-File
+
+SOUND.C
+- bugfix in function DestroyWaveThread(), the WM_QUIT message may
+  failed and so the sound message thread wasn't shut down
+- changed function SoundOpen(), added additional check if the sound
+  device support the necessary audio format
+
+SYMBFILE.C
+- changed function RplLoadTable(), made optimizations and added
+  integrity checks
+
+
+Emu28 v1.28
+
+DEBUGGER.C
+- removed INSTRSIZE definition
+- changed function GetAddr(), made function more general by adding
+  address range check and the ability of decoding a symbolic entry
+  into an address
+- bugfix in function OnSetCursor(), on "Activation follows mouse"
+  enabled child dialogs lost focus when cursor moved over parent
+  debugger dialog
+- changed function Debugger(), removed initialization of global
+  variable wInstrSize
+- changed function EnterAddr(), changed parameter storage from
+  static variable to window user data and replaced address decoder
+  code by GetAddr() function call
+- changed function EnterBreakpoint(), replaced address decoder code
+  by GetAddr() function call and so added decoding a symbolic entry
+  into an address
+- bugfix in function LoadMemData(), forgot to check if file content
+  fit into Saturn address range, loading now stops also after last
+  Saturn address written
+- changed function SaveMemData(), added assertion for Saturn address
+  verification
+- bugfix in function DebugMemLoad() and DebugMemSave(), adjusted to
+  new prototype of function GetAddr() and so added checking if the
+  given addresses are in the Saturn address range because Saturn
+  read/write functions don't do the range check; this also cause a
+  change in behavior, on empty address fields the operation fails
+  and the dialog still remains open
+
+DISPLAY.C
+- changed function UpdateContrast(), replaced BitBlt() by PatBlt()
+  function call
+- changed function CreateLcdBitmap(), added implementation to select
+  the pixel drawing routine over function pointer, Zoom factors 1-4
+  still using the old implementation, greater Zoom factors are using
+  a more generic approach
+- changed DestroyLcdBitmap(), added reset of variables x-zoom factor
+  and function pointer WritePixel
+- replaced function WritePixelQuad() by the new functions
+  WritePixelZoom4(), WritePixelZoom3(), WritePixelZoom2() and
+  WritePixelZoom1() and WritePixelDWORD(), WritePixelWORD() and
+  WritePixelBYTE() with new implementation to support nLcdZoom
+  values > 4
+- added function WriteDisplayCol() for writing a display column
+- changed function UpdateMainDisplay(), removed zoom factor
+  assertion and simplified writing of display area
+- changed function UpdateAnnunciators(), changed to a more efficient
+  bitcount implementation and other minor optimizations
+- bugfix in function StopDisplay(), restoring the LCD background
+  wasn't locked against GUI thread GDI access
+
+EMU28.C
+- changed function SetSoundDeviceList(), replaced "Standard Audio"
+  device ID from constant to definition
+- bugfix in function SettingsProc(), restart the sound engine by
+  calling the clean up and initialization functions now and on
+  "Activation follows mouse" enabled debugger dialog maybe got focus
+  even if it's not the last active one
+- changed function OnFileNew(), removed call of function
+  SaveBackup() which is already a part of function NewDocument()
+- changed function OnFileNew(), OnFileOpen(), OnFileMruOpen(),
+  OnFileSave(), OnFileSaveAs() and OnFileClose(), switched detection
+  of document is available from variable pbyRom (ROM image loaded)
+  to variable bDocumentAvail
+- changed function OnViewCopy(), removed nLcdZoom assertion and
+  MONOCHROME source code part
+- changed function WinMain(), added sound engine initialization and
+  clean up
+
+EMU28.RC
+- changed version and copyright
+
+ENGINE.C
+- initialized variable wInstrSize with size of last instruction
+  array (the circular buffer can hold (wInstrSize-1) instructions)
+- bugfix in function WorkerThread(), moved sound engine
+  initialization and clean up from SM_RUN state to main function,
+  this prevents a non responding Saturn CPU emulation when changing
+  from SM_SLEEP to SM_RUN state during sound engine initialization
+
+FETCH.C
+- made typedef of jump table struct constant, so the const keyword
+  was removed from all references of JMPTAB
+- changed function EvalOpcode(), minor code optimization
+
+FILES.C
+- bugfix in function PatchRom(), removed limitation that patch file
+  must have 6 characters minimum, fixed a buffer overflow when end
+  of patch file consists of white space characters, recalculate
+  checksums only on address patch written and return failture on
+  syntax errors now
+
+KML.C
+- changed function InitLcd(), removed Zoom factor 4 limitation
+
+PCH.H
+- added GWLP_USERDATA, SetWindowLongPtr, GetWindowLongPtr and
+  LONG_PTR definitions for MSVC6.0 SDK and earlier
+
+REDEYE.C
+- changed function IrPrinter(), changed to a more efficient
+  bitcount implementation for missed bits
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "LastInstrBufSize" in section [Debugger] in the INI-File
+
+SOUND.C
+- changed function GetSoundBuf() and SoundOpen(), eliminate GCC
+  warning
+
+STACK.C
+- added function Trim(), create a trimmed copy of the input string
+- added function SetBcd(), contain implementation of prior function
+  RPL_SetBcd()
+- changed function RPL_SetBcd(), wrapper for function SetBcd() to
+  trim data before decoding
+- changed function RPL_SetComplex(), create a trimmed working copy
+  before decoding the outline brackets and because of the changed
+  function RPL_SetBcd() the real number arguments are accepted with
+  white spaces around now
+
+UDP.C
+- changed function SendByteUdp(), replaced malloc() by _alloca()
+  call for UNICODE wchar to char string translation to get rid of
+  freeing the allocated memory manually
+
+
+Emu28 v1.27
+
+DDESERV.C
+- prepared for C++ compiling
+
+DEBUGGER.C
+- prepared for C++ compiling
+- added new function OnCodeFindPCO(), search for a PCO object in the
+  code window
+- changed function Debugger(), added context menu commands handler
+  in the WM_COMMAND section
+- changed function OnFindOK(), added downwards search direction
+- changed function Find(), added and changed message handler for the
+  "Previous" and "Next" buttons
+- changed function UpdateProfileWnd(), changed CPU frequency from
+  640000 constant to calculated one from T2CYCLES
+
+DISPLAY.C
+- prepared for C++ compiling
+
+EMU28.C
+- prepared for C++ compiling
+- replaced global variable ThreadId with local variable dwThreadId
+- added global variable with the identifier for the waveform-audio
+  output device
+- added function SetSoundDeviceList(), helper function for filling
+  sound device combo box with waveform-audio output devices
+- changed function SettingsProc(), removed sound radio button
+  handlers and added implementation of sound device combo box
+- bugfix in function OnViewScript(), ROM image change wasn't handled
+- bugfix in function OnCopyData(), state file loading is only
+  allowed when the current instance has already a document available
+
+EMU28.DSP
+- added sound.c sources
+
+EMU28.H
+- prepared for C++ compiling
+- extern declaration of global variables and functions
+- removed extern declaration of global variable
+
+EMU28.RC
+- changed IDD_FIND, added a "Previous" button for previous search,
+  shorten the text of the "Find Next" button to "Next" and changed
+  the ID of the next search button
+- changed IDD_SETTINGS, removed "Speaker" and "Wave" radio buttons
+  and added "Device" combo box in the sound section
+- added "Previous PCO" and "Next PCO" menu entries in debugger
+  "Code" context menu
+- changed version and copyright
+
+ENGINE.C
+- added global variable bEnableSlow for global disabling slowing
+  down the CPU
+- added global variable bSoundSlow slowing down the CPU core at
+  sound output
+- bugfix default setting of variable dwSaturnCycles, the real CPU is
+  running with a nominal strobe frequency of ~640 kHz
+  -> 640000 / 16384 = 39
+- changed function AdjustSpeed() and InitAdjustSpeed, added sound
+  slow down implementation
+- changed function WorkerThread(), added sound engine control
+
+EXTERNAL.C
+- removed global variable bWaveBeep
+- moved global variable dwWaveVol to module sound.c
+- removed functions BeepWave() and BeepWin9x()
+- changed function External(), removed PC speaker support and used
+  function SoundBeep() instead of BeepWave() for beep output over
+  sound card, changed CPU cycles estimation from 1MHz to 640kHz CPU
+  strobe frequency
+
+FETCH.C
+- prepared for C++ compiling
+
+FILES.C
+- prepared for C++ compiling
+- changed function MapRom(), modified minimum file size detection
+  and replaced VirtualAlloc() with malloc() memory request
+- changed function UnmapRom(), adjusted memory deallocation
+- changed function SaveBackup(), improved document available
+  detection
+
+KML.C
+- prepared for C++ compiling
+- added global variable wKeybLocId to hold the keyboard layout input
+  locale at begin of KML loading
+- changed function ParseBlocks(), use variable wKeybLocId instead
+  of input locale reading
+- bugfix in function KillKML(), key mapping state table wasn't
+  cleared at the end and added reset of variable wKeybLocId
+- bugfix in function InitKML(), changed implementation by reading
+  the current keyboard layout and convert the layout data to the
+  input locale setting
+
+MRU.C
+- prepared for C++ compiling
+
+OPCODES.C
+- changed function o801(), call beeper handler function on beeper
+  port change
+
+PCH.H
+- added include malloc.h
+
+RESOURCE.H
+- added definitions
+- removed IDC_SOUND_SPEAKER and IDC_SOUND_WAVE
+
+RPL.C
+- prepared for C++ compiling
+
+SETTINGS.C
+- bugfix in function GetRegistryString(), ignored target buffer size
+  when copying the default to the target string buffer
+- changed function ReadSettings() and WriteSettings(), added item
+  "WaveDeviceId" and "WaveTime" and deleted item "WaveBeep" in
+  section [Emulator] in the INI-File
+
+SOUND.C
+- new module for native beeper emulation over wave output device
+
+STACK.C
+- prepared for C++ compiling
+
+SYMBFILE.C
+- prepared for C++ compiling
+
+
+Emu28 v1.26
+
+DEBUGGER.C
+- removed variables pbyMapData and dwMapDataSize, the implementation
+  behind moved to module DISMEM.C
+- bugfix in function SetMappingMenu(), disable RPL object viewer if
+  the memory browser isn't in mapped memory mode
+- changed function SetMappingMenu(), ViewMemWnd() and OnFindOK(),
+  changed to DISMEM.C implementation
+- changed function GetMemCurAddr(), OnMemGoAdr(), OnKeyUpDown() and
+  OnKeyPlusMinus(), variable dwMapDataSize isn't global any more,
+  use function GetMemDataMask() instead
+- changed function ViewCodeWnd(), set disassembler to memory mapped
+  mode
+- bugfix in function OnDblClick(), fixed buffer overflow when
+  converting a 2 byte hexadecimal string to a byte and added an
+  update of code window
+- changed function Debugger(), added initialization of RPL object
+  viewer get nibble function in WM_INITDIALOG message
+- bugfix in function UpdateRplObjViewWnd(), show entry point names
+  only in mapped mode and end address for RPL object viewer depend
+  on the actual memory mapping mode and with the design change to
+  the DISMEM.C implementation in all debugger and disassembler
+  related parts, the RPL object viewer also works in all memory
+  mapping modes properly now
+
+DISASM.C
+- changed function read_nibble(), call function GetMemNib() from the
+  new module DISMEM.C for mapping mode memory access and made
+  function static
+
+DISMEM.C
+- new module for accessing memory data for debug view purpose
+
+DISRPL.C
+- the get nibble function is not hard referenced as read_nibble()
+  call any more, it's now called over RplReadNibble() function
+  pointer
+- changed function PrintTail(), expanded to handle 6 digit addresses
+
+DISRPL.H
+- added extern declaration of RplReadNibble() function pointer
+
+EMU28.C
+- changed function Disasm(), changed to DISMEM.C implementation
+- added function OnCopyData() as WM_COPYDATA message handler
+  implementation for changing the state file to the given state file
+  name
+- changed function MainWndProc(), added WM_COPYDATA message handler
+- changed function WinMain(), expanded single instance case by
+  transmitting the given state file name to the already opened
+  program instance and added more flexible CPU binding for the
+  Saturn core emulation thread on Windows NT4.0 and later
+
+EMU28.DSP
+- added dismem.c sources
+
+EMU28.H
+- added WM_COPYDATA identifier definition
+- added enum MEM_MAPPING
+- extern declaration of global functions
+- removed extern declaration of global variable
+
+EMU28.RC
+- changed version
+
+KML.C
+- added global variable bLocaleInc for checking if locale block
+  content already included
+- added keyword "Locale" to pLexToken[] and token TOK_LOCALE to
+  eIsGlobalBlock[] table
+- changed function ParseLine() and ParseBlock(), preset szLexString
+  variable with NULL after freeing
+- changed function IncludeLines() and IncludeBlocks(), changed
+  function prototype by adding a boolean argument for selecting the
+  text message "Including" or "Parsing" in the log file
+- bugfix in function ParseLines(), return a TOK_NONE line for an
+  empty block instead of a NULL pointer which regular stands for a
+  syntax error
+- bugfix in function ParseLines() and ParseBlocks(), changed
+  function prototype by adding a boolean argument for selecting the
+  mode "include" or "parse" for the next lines or blocks and
+  verifying the "Include" argument was incomplete and may caused
+  memory leaks at error condition
+- bugfix in function ParseBlock(), verifying the block commmand
+  argument was incomplete and may caused a memory leak at error
+  condition
+- changed function ParseBlocks(), changed function prototype by
+  adding a boolean argument if an "End" token is also valid and
+  added implementation of block "Locale"
+- changed function KillKML(), added reset of variable bLocaleInc
+- bugfix in function ReloadButtons(), ON key button wasn't handled
+- changed function ReleaseButton(), for speed optimization skip
+  function if button is already released
+- bugfix in function LoadKMLGlobal(), fixed a memory leak caused by
+  the error condition that expected block command is a string
+- changed function InitKML(), added current keyboard input locale
+  setting log file text
+
+KML.H
+- added TOK_LOCALE definition
+
+TIMER.C
+- changed function SetHPTime(), time calculation now work properly
+  for host system dates before 1970/01/01 and after 2106/02/07
+
+
+Emu28 v1.25
+
+DISPLAY.C
+- changed function UpdateContrast(), new brush is only necessary for
+  an initialized KML contrast palette entry
+- changed function CreateLcdBitmap(), preset KML contrast palette
+  with black on background for the case of a complete uninitialized
+  KML contrast palette
+- bugfix in function UpdateMainDisplay(), don't draw display pattern
+  on uninitialized KML foreground contrast palette entry;
+  bug/behavior was introduced in v1.24 to get display output also
+  for the case of no KML contrast palette entries defined
+- changed function UpdateMainDisplay(), exchanged StretchBlt() back
+  to BitBlt() because the bug in the WineHQ BitBlt() implementation
+  was fixed in Wine 1.4
+- bugfix in function UpdateAnnunciators(), don't draw annunciators
+  on uninitialized KML foreground contrast palette entry;
+  bug/behavior was introduced in v1.24 to get display output also
+  for the case of no KML contrast palette entries defined
+
+EMU28.C
+- changed function OnPaint(), exchanged StretchBlt() back to
+  BitBlt() in display redraw part because the bug in the WineHQ
+  BitBlt() implementation was fixed in Wine 1.4
+
+EMU28.RC
+- changed version
+
+
+Emu28 v1.24
+
+DEBUGGER.C
+- changed function ViewMemWnd(), removed initialized but unused
+  variable
+
+DISPLAY.C
+- initialize hBrush variable
+- bugfix in function UpdateContrast(), delete only brush if exists,
+  fixed possible use of uninitialized KML contrast palette for
+  display pattern -> use black brush for this case and added
+  GdiFlush() before the end of the GDI critical section to eval all
+  pending GDI operations to avoid GDI problems on a different task
+- bugfix in function CreateLcdBitmap(), display pattern brush
+  initialization may failed because of an uninitialized KML contrast
+  palette -> brush now created in function UpdateContrast()
+- changed function DestroyLcdBitmap(), reset hBrush after deleting
+- bugfix in function UpdateMainDisplay(), display pattern drawing is
+  independent from initialization state of KML contrast palette
+- bugfix in function UpdateAnnunciators(), annunciators hadn't
+  worked in the case of uninitialized KML contrast palette for
+  display pattern
+
+DISRPL.C
+- changed function RplCreateObjView(), defined end pointer also as
+  constant
+
+EMU28.C
+- changed function SettingsProc(), added "Single Instance" checkbox
+  handling
+- bugfix in function OnDropFiles(), changed function prototype to
+  the correct structure type of dropped file names and initialized
+  the bSuccess variable for the case the wNumFiles variable is 0
+- changed function MainWndProc(), made correct type cast to argument
+  of function OnDropFiles()
+- changed function WinMain(), replaced multiple class name usage
+  with atom variable, moved read settings before window creation,
+  and added check for setting "SingleInstance" to switch to an
+  already running program instance instead of creating a new one
+
+EMU28.H
+- extern declaration of global variable
+
+EMU28.RC
+- added item "Single Instance" in settings dialog
+- changed version and copyright
+
+FILES.C
+- bugfix in function DecodeBmp() and DecodeGif(), a 2nd bitmap load
+  allocated and bound a 2nd palette to the main window, now only the
+  1st bitmap (mostly the KML background bitmap) bound his palette to
+  the main window
+
+KML.C
+- changed table pLexToken[], defined table as constant and changed
+  last token id table preset from constant number to member of token
+  id enumerator
+- bugfix in function ParseString(), decoding the \" sequence as
+  quotation mark inside a string was incomplete, so every single '\'
+  character was also removed
+
+MRU.C
+- changed function MruUpdateMenu(), changed variable type of
+  variable hMenu
+- changed function MruReadList(), removed initialized but unused
+  variable
+
+RESOURCE.H
+- added definition
+
+SETTINGS.C
+- changed function ReadSettings(), moved CPU speed setting to
+  MainWndProc()
+- changed function ReadSettings() and WriteSettings(), added item
+  "SingleInstance" in section [Emulator] in the INI-File
+
+UDP.C
+- added function ResetUdp(), reset UDP address
+- bugfix in function SendByteUdp(), fixed memory leak at error
+  condition and optimized IP address decoding
+
+
+Emu28 v1.23
+
+EMU28.C
+- changed function SettingsProc(), added infrared printer settings
+- changed function SaveChanges(), detect if document is available
+  now over the variable bDocumentAvail and not over the variable
+  pbyRom any more; in the case of an illegal KML script there maybe
+  a document loaded, but no ROM image, so pbyRom will be NULL in
+  this case
+- bugfix function OnViewScript(), when quitted the dialog "Choose
+  Your KML Script" with the Cancel button when chosen an invalid
+  script the function returned without the possibility of saving the
+  current document; now the function try to reload the primarily KML
+  script and if this also fails then the current document is saved
+
+EMU28.H
+- extern declaration of global variables and functions
+
+EMU28.DSP
+- added redeye.c and udp.c sources
+- added library Ws2_32.lib
+
+EMU28.RC
+- added "Infrared Printer" group in Settings dialog
+- changed version
+
+ENGINE.C
+- added global variable nOpcSlow to hold the number of CPU opcodes
+  slowing down the CPU core
+- changed function AdjustSpeed(), added CPU opcode slow down
+  implementation
+- added function InitAdjustSpeed(), initialize CPU slow down part
+  if necessary
+- changed function AdjKeySpeed() and SetSpeed(), use function
+  InitAdjustSpeed() to initialize the CPU slow down variables
+
+FILES.C
+- changed function CrcRom(), if no ROM available return without
+  modifying the checksum
+- changed function ResetDocument(), NewDocument(), OpenDocument()
+  and RestoreBackup(), added state variable if document is available
+
+KEYMACRO.C
+- changed function EventThread(), added minimum key hold time for
+  keyboard macro playing and subtract minimum key hold time from
+  saved waiting time, this is more accurate when the user has
+  selected a different minimum key hold time than the default one
+- changed function KeyMacroRecord(), now saving the complete waiting
+  time including the key state holding time, the key state holding
+  time is now subtract in the player function thread EventThread()
+- changed function OnToolMacroNew(), removed adding the key state
+  holding time to the reference time, this is not necessary any more
+
+MOPS.C
+- added function ReadTAcc(), reading timer value with checking for
+  CPU speed measurement behaviour
+- changed function ReadIO() and ReadSlaveIO(), the timer register
+  content is now read by function ReadTAcc() to analyze the read
+  access scheme
+- bugfix in function WriteIO(), added implementation of the STL bit
+  in the LEDOUT (0x30D) register
+
+PCH.H
+- added include winsock2.h
+
+REDEYE.C
+- new module for decoding the redeye data stream for a HP82240B
+  printer
+
+RESOURCE.H
+- added some definitions
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "KeyMinDelay" in section [Macro] and the items "Address" and
+  "Port" in section [IrPrinter] in the INI-File
+
+UDP.C
+- new module for sending a byte over UDP
+
+
+Emu28 v1.22
+
+DDESERV.C
+- replaced all HeapAlloc() with malloc() memory requests
+
+DEBUGGER.C
+- replaced all HeapAlloc() with malloc() memory requests
+- changed function ToggleBreakpoint() and EditBreakpoint(), minor
+  code optimization purging breakpoint
+- changed function Debugger(), removed all UpdateWindowStatus()
+  function calls
+- bugfix in function LoadBreakpointList(), added check of breakpoint
+  entries against breakpoint table size
+
+DISPLAY.C
+- initialized the color array in variable bmiLcd now
+- changed function CreateLcdBitmap(), removed color initialization
+- changed function WritePixelQuad(), draw only the pixel that have
+  to be switched on and removed color index 2 references in the
+  pattern array of Zoom 2 and 4
+
+DISRPL.C
+- replaced all HeapAlloc() with malloc() memory requests
+- bugfix in function BCDx(), fixed possible uninitialized bExpflag
+  variable
+- bugfix in function DoRrp(), fixed possible uninitialized bErr
+  variable
+
+EMU28.C
+- removed global variable hHeap
+- replaced all HeapAlloc() with malloc() memory requests
+- renamed function UpdateWindowStatus() to OnInitMenu() and modified
+  it to a WM_INITMENU message handler
+- changed function OnFileNew() and WinMain(), removed all
+  UpdateWindowStatus() function calls
+- changed function MainWndProc(), added WM_INITMENU message handler
+  and call of _CrtDumpMemoryLeaks() at end of program to detect
+  malloc() memory leaks
+
+EMU28.DSP
+- changed the resource natural language to English
+
+EMU28.H
+- removed extern declaration of hHeap
+- removed declaration of global functions UpdateWindowStatus(),
+  ReadIO(), WriteIO(),  ReadSlaveIO() and WriteSlaveIO()
+- replaced all HeapAlloc() with malloc() memory requests
+
+EMU28.RC
+- changed version and copyright
+
+ENGINE.C
+- changed function SwitchToState(), removed all UpdateWindowStatus()
+  function calls
+
+EXTERNAL.C
+- replaced all HeapAlloc() with malloc() memory requests
+
+FILES.C
+- replaced all HeapAlloc() with malloc() memory requests
+- changed function ResetDocument(), OpenDocument(),
+  SaveDocumentAs(), SaveBackup(), RestoreBackup() and ResetBackup(),
+  removed all UpdateWindowStatus() function calls
+- bugfix in function OpenDocument(), added check of KML script name
+  length against target buffer size and fixed a bug calculating
+  the number of key rows from the Chipset.Keyboard_Row buffer
+- changed function DibNumColors(), changed function prototype from
+  UINT to WORD return
+- changed function CreateBIPalette(), changed variable
+  UINT nNumColors to WORD wNumColors to avoid variable overflow
+  loading palNumEntries of LOGPALETTE structure
+
+KEYMACRO.C
+- changed function OnToolMacroNew(), OnToolMacroPlay() and
+  OnToolMacroStop(), removed all UpdateWindowStatus() function calls
+
+KML.C
+- replaced all HeapAlloc() with malloc() memory requests
+- changed function ParseLines(), BOOL expression was missing in main
+  while() loop, worked because TOK_NONE is 0
+- bugfix in function ParseBlock(), string argument wasn't freed in
+  error case
+- changed function KillKML(), removed UpdateWindowStatus() function
+  call
+- changed function LoadKMLGlobal(), used wrong variable type for
+  variable eToken
+
+MOPS.C
+- added function NreadEx() as replacement for the functions Npeek()
+  and Nread()
+- changed function Npeek() and Nread(), coded as inline to call the
+  replacement function NreadEx()
+- made functions  ReadIO(), WriteIO(),  ReadSlaveIO() and
+  WriteSlaveIO() static
+
+MRU.C
+- replaced all HeapAlloc() with malloc() memory requests
+
+OPS.H
+- bugfix in function FASTPTR(), longest opcode calculation from
+  buffer size was wrong, so MMU boundary fixup wasn't working
+  properly
+
+RPL.C
+- replaced all HeapAlloc() with malloc() memory requests
+
+STACK.C
+- replaced all HeapAlloc() with malloc() memory requests
+- bugfix in function RPL_GetBcd(), fixed possible uninitialized
+  bExpflag variable
+- bugfix in function OnStackCopy(), fixed possible uninitialized
+  uClipboardFormat variable in DOCSTR case
+
+SYMBFILE.C
+- replaced all HeapAlloc() with malloc() memory requests
+
+
+Emu28 v1.21
+
+EMU28.C
+- changed function Disasm(), added if opcode should be interpreted
+  as PCO
+
+EMU28.RC
+- changed IDR_DEBUG_MEM, added several accelerator keys
+- changed version
+
+FILES.C
+- changed function CorrectChecksum(), this version of the function
+  can now replace the checksum at a given checksum address at not
+  only at the end of a block
+- removed function RebuildRomChecksum(), the function replaced the
+  checksum at a wrong position and so destroyed valid code. Because
+  the correct checksum positions of real ROM versions are unknown
+  for me, code was removed
+- bugfix in function PatchRom(), removed call of function
+  RebuildRomChecksum() because checksums were replaced at wrong
+  ROM addresses
+
+OPS.H
+- changed function Nunpack(), new coding for speed optimization,
+  this solved also a bug in the code optimizer of VS2010 (the
+  optimizer generated wrong code, another possible workaround for
+  this problem was declaring the function argument "BYTE *a" as
+  "volatile BYTE *a")
+
+PCH.H
+- added INVALID_FILE_ATTRIBUTES definition
+
+SETTINGS.C
+- changed function WriteReg() and DelReg(), changed function
+  protoytypes to make them compatible with the functions
+  WritePrivateProfileString() and WritePrivateProfileInt()
+- changed function GetRegistryInt(), changed function protoytype to
+  make it compatible with function GetPrivateProfileInt()
+
+
+Emu28 v1.20
+
+DISPLAY.C
+- changed function UpdateContrast(), GetSizeLcdBitmap(),
+  CreateLcdBitmap(), DestroyLcdBitmap(), UpdateMainDisplay(),
+  UpdateAnnunciators() and StopDisplay(), added support for real
+  image LCD background
+- changed function UpdateMainDisplay(), removed remark that ROW line
+  drivers aren't emulated
+
+EMU28.H
+- extern declaration of global variable
+- deleted unused DSPAREA enumeration
+
+EMU28.RC
+- changed IDD_DEBUG_SETTINGS, replaced "Ok" with "OK" and removed
+  accelerator keys from "OK" and "Cancel"
+- changed version and copyright
+
+FILES.C
+- added global variable pbyRamExt to hold the memory module pointer
+  prior located in the Chipset structure
+- changed function CorrectChecksum(), if the checksum without the
+  last byte is already 1, 0xFF should be added instead of the also
+  correct 0x00
+- bugfix in function PatchRom(), if first patch address in a line
+  was outside the ROM area, the emulator crashed with an access
+  violation, removed the patch address wrap around
+- changed function ResetDocument(), NewDocument(), OpenDocument(),
+  SaveDocument(), SaveBackup(), RestoreBackup() and ResetBackup(),
+  replaced Chipset memory pointer RamExt with new variable
+
+KML.C
+- changed function RunLine(), removed warning when compiling for x64
+  architecture
+
+MOPS.C
+- changed table EXT[], replaced Chipset memory pointer RamExt with
+  new variable
+- changed function WriteIO(), added detection of row line data write
+  access to update the LCD background
+
+OPCODES.C
+- bugfix in function o807(), a pressed ON key prevented the CPU
+  going into shutdown mode
+
+OPS.H
+- bugfix in function FASTPTR(), longest opcode is 21 nibbles long
+  and fixed problem executing an opcode over a MMU boundary
+
+PCH.H
+- enabled WinXP style under VS2005 and VS2008
+
+STACK.C
+- bugfix in function OnStackCopy(), local target buffer was too
+  small to hold a large complex number
+
+TYPES.H
+- changed structure CHIPSET, replaced RamExt with a DWORD
+  placeholder, because when compiling for x64 architecture this 4
+  byte pointer grow up to 8 bytes and destroy the state file
+  structure
+
+
+Emu28 v1.19
+
+DEBUGGER.C
+- added backup breakpoint list
+- changed function EnterAddr(), expanded hex address range from 6 to
+  8 digits
+- added functions SaveBreakpointList() and
+  CreateBackupBreakpointList() to handle the backup breakpoint list
+
+DEBUGGER.H
+- extern declaration of global functions
+
+DISRPL.C
+- bugfix in function BCDx(), detection for exponent writing was
+  wrong -> on negative exponents sometimes the result format was
+  wrong, on positive exponents sometimes the result itself was wrong
+- added variable bRplViewAsm to enable showing ASM code instead of
+  hex data
+- changed function PrintHead(), changed function prototype and
+  changed binary data view for use in disassembler
+- added function PrintLevel() for writing level depending blanks
+- added function AssemblyOutput(), ASM code viewer for
+  "RPL Object Viewer" module
+- changed function RplCreateObjView(), adjusted to new prototype of
+  function PrintHead(), replaced level depending blank drawing by
+  calling function PrintLevel() and added a call to replace the
+  decoded CODE hex string object by a ASM code disassembly
+
+DISRPL.H
+- extern declaration of global variable
+
+EMU28.C
+- changed function OnFileMruOpen(), on success move selected entry
+  to top of MRU table
+
+EMU28.DSP
+- changed to REGISTRY (HKCU/Software/Emu28) saving
+
+EMU28.H
+- added MMU bit definitions PAGE_BITS, ADDR_BITS and ADDR_SIZE
+- changed variable prototypes of RMap[] and WMap[]
+- extern declaration of global variable and function
+
+EMU28.RC
+- changed version
+
+FILES.C
+- bugfix in function SaveBackup(), a backup of the debugger
+  breakpoint list wasn't created
+- bugfix in function RestoreBackup(), the debugger breakpoint list
+  wasn't restored so the breakpoints got lost when saving the state
+  file and added preserving debugger open state, this feature was
+  lost as a result of a bugfix in an earlier version
+
+KML.C
+- added keyword "IfMem" to pLexToken[] table
+- added token TOK_IFMEM to eIsBlock[] table
+- removed function FatalError()
+- bugfix in function ParseString(), replaced error text
+- bugfix in function IncludeLines(), removed fatal error message
+  text
+- bugfix in function ParseLines(), in some cases parsing hadn't
+  stopped with an error inside a block with an unreferenced include
+  file and removed a fatal error message text
+- bugfix in function ParseBlock(), block argument checking generated
+  wrong error messages in the case of syntax errors
+- bugfix in function IncludeBlocks(), removed fatal error message
+  text
+- changed function ParseBlocks(), removed "Invalid block." message
+  text and made some code optimizations calling the function
+  FatalError()
+- changed function InitButton(), source code improvement checking
+  the size of button array
+- changed function RunLine(), added implementation of "IfMem"
+  command
+
+KML.H
+- added TOK_IFMEM definition
+
+MOPS.C
+- bugfix in MAPMASK() and MAPSIZE() definition, used wrong define
+  for page calculation
+- bugfix in function ModuleId(), used define had nothing to do with
+  with module size calculation
+- changed prototype of variable RMap[] and WMap[], used better name
+  inside size definition
+- bugfix in function MapNCE(), MapEXT(), MapROM(), Config(),
+  Uncnfg() and MapData(), used wrong define for page calculation
+- bugfix in function Npeek(), Nread() and Nwrite(), used wrong
+  define for display/timer/control address calculation and used
+  wrong define for memory page calculation
+
+MRU.C
+- changed function MruAdd(), added entry moving to top when the
+  entry is already in the table
+- added function MruMoveTop(), move MRU entry to top of table
+
+OPS.H
+- removed PAGE_SIZE and ADDR_SIZE definition
+- bugfix in function FASTPTR(), used wrong define for page
+  calculation
+
+STACK.C
+- bugfix in function RPL_GetBcd(), detection for exponent writing
+  was wrong -> on negative exponents sometimes the result format was
+  wrong, on positive exponents from E12 until E14 with 12 digit
+  mantissa setting the result itself was wrong
+- added helper functions RPL_GetComplex() and RPL_SetComplex() to
+  handle complex number objects
+- added function DoComplex() to handle a complex number object
+- changed function OnStackCopy(), added complex number support
+- changed function OnStackPaste(), added flag to disable automatic
+  clipboard object detection and added complex number support
+
+
+Emu28 v1.18
+
+DDESERV.C
+- bugfix in function DdeCallback(), readded delay at XTYP_POKE after
+  ON key state change switching calculator on, bug introduced in
+  v1.07 and added stack level adjust at XTYP_REQUEST for the case
+  that the calculator is off and made ON key hold time variable
+
+DEBUGGER.C
+- changed function SetMappingMenu(), added control of memory menu
+  items ID_DEBUG_MEM_LOAD and ID_DEBUG_MEM_SAVE
+- changed function Debugger(), added calls of Load/Save Memory Data
+  and "RPL Object Viewer" handling functions
+- changed function OnFindOK(), in the case of a search match, update
+  also the RPL object viewer window
+- added functions for "RPL Object Viewer" dialog box
+- added functions for Load/Save Memory Data handling
+
+DISPLAY.C
+- made global variable pbyLcd static
+- changed function UpdateMainDisplay(), exchanged BitBlt() with
+  StretchBlt() because of a serious bug in the WineHQ BitBlt()
+  implementation (in this environment StretchBlt() is ~5us slower
+  than BitBlt() so it doesn't really matter from the speed aspect)
+- changed function LcdProc(), added critical section for display
+  update is in progress
+- bugfix in function StopDisplay(), function timeKillEvent() don't
+  stop the display update immediately, so I have to wait until
+  display update finished before I clear the display buffer
+
+DISRPL.C
+- new module for RPL object decoding
+
+DISRPL.H
+- header file for RPL object decoding part
+
+EMU28.C
+- added Critical Section initialization for LCD lock
+- changed function On Paint(), exchanged BitBlt() with StretchBlt()
+  in display redraw part because of a serious bug in the WineHQ
+  BitBlt() implementation
+- bugfix in function OnDropFiles() and OnObjectLoad(), readded
+  delay after ON key state change switching calculator on, bug
+  introduced in v1.07 and made ON key hold time variable
+- changed function OnObjectLoad(), changed load object warning
+  message
+- changed function WinMain(), added non modal "RPL Object Viewer"
+  dialog box in main message handler
+- bugfix in function WinMain(), getting the full path name of the
+  current state file failed in the case of an empty name buffer
+
+EMU28.DSP
+- added disrpl.c source
+
+EMU28.H
+- removed extern declaration of pbyLcd
+- extern declaration of global variables
+
+EMU28.RC
+- changed IDD_SETTINGS, replaced "Ok" with "OK" and removed
+  accelerator keys from "OK" and "Cancel"
+- added dialogs IDD_DEBUG_MEMSAVE, IDD_DEBUG_MEMLOAD and IDD_RPLVIEW
+- added "Load Memory Data...", "Save Memory Data..." and
+  "Rpl Object Viewer..." menu entries in debugger "Memory" context
+  menu
+- changed version and copyright
+
+FILES.C
+- bugfix in function OpenDocument(), if document reload was refused
+  the function returned no success -> this caused trouble in
+  function OnFileMruOpen() removing the MRU entry of this document
+- changed function GetOpenFilename(), added file filter for all
+  Emu28 specific filenames which is default, changed filter names
+  and removed model specific file extension selection
+- changed function GetSaveAsFilename(), changed filter names and use
+  small size characters for file extensions
+- bugfix in function SaveObject(), stack level 1 worked only for the
+  case that the calculator was on, if the calculator is off the
+  relevant object is at stack level 2
+- added function DecodeBmp(), contain the BMP image file decoder
+  prior located in function LoadBitmapFile() and added check of
+  bitmap file size
+- added functions ReadGifByte(), ReadGifWord() and DecodeGif() for
+  decoding GIF image files
+- bugfix in function LoadBitmapFile(), check for a valid file handle
+  was missing, moved BMP image file decoder to function DecodeBmp()
+  and added GIF image file support
+
+KEYBOARD.C
+- changed function KeyboardEvent(), made key switch time variable
+
+KML.C
+- added function UpdateScriptList(), filling the KML script combo
+  box with all found script titles and select the current used one
+- changed function ChooseKMLProc(), call function UpdateScriptList()
+  to update the KML script combo box now
+- changed function InitGlobal(), changed some punctuation and
+  capital letters
+- bugfix in function ReloadButtons(), global variable bKeyPressed
+  wasn't updated
+
+RESOURCE.H
+- added definitions for Load/Save Memory Data and RPL object viewer
+  handling
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added items
+  "WakeupDelay" and "KeyMinDelay" in section [Emulator] in the
+  INI-File
+
+STACK.C
+- bugfix in function OnStackPaste(), added delay after ON key state
+  change switching calculator on and made ON key hold time variable
+
+
+Emu28 v1.17
+
+DDESERV.C
+- bugfix in function DdeCallback(), readded delay after ON key state
+  change, bug introduced in v1.07
+
+DEBUGGER.C
+- added function LoadSymbTable(), loading symbol table defined in
+  INI-File
+- added function GetMemCurAddr(), get address of cursor in memory
+  window
+- changed function ViewCodeWnd(), function now returns the line
+  number with the pc, adjusted address to Saturn address area, added
+  label line if address is a known entry and added a check if the 5
+  nibble sequence on an address should be interpreted as PCO
+- changed function ViewCodeWnd() and InfoIntr(), adjusted to new
+  prototype of function disassemble()
+- changed function UpdateCodeWnd(), if pc should shown at first line
+  but the pc is the begin of a PCO, show PCO address as first line
+  instead, added handling for label line
+- changed function OnKeyF5(), for label line support changed
+  detection of PC line
+- changed function OnCodeGoAdr(), removed limitation to Saturn
+  address area, limitation now done in function ViewCodeWnd()
+- added function OnKeyPlusMinus(), +/- key handler for memory window
+- changed function OnKeyCodeWnd(), added handling for label line and
+  removed limitation going back before address 0
+- changed function OnDrawCodeWnd(), added draw style for label line
+- changed function Debugger(), added initialization and
+  uninitialization of symbol table and bold font, added +/- key
+  handling for memory window and added Debugger Settings to the
+  system menu
+- added functions for Debugger Settings handling
+- changed function EnterAddr(), added decoding a symbolic entry into
+  an address
+- changed function InfoIntr(), added label line if instruction
+  address is a known entry
+
+DISASM.C
+- added variable disassembler_symb to enable symbolic address
+  disassembly
+- changed function read_nibble(), made function public
+- changed function append_imm_nibble(), if the immediate data is 5
+  nibbles long and the decoded data is a known symbolic entry, show
+  the symbolic name instead of the data
+- added new function append_numaddr(), numeric output of an address
+- changed function append_addr(), if the address is a known symbolic
+  entry, show the symbolic name instead of the address
+- bugfix in function append_r_addr(), in some rare conditions the
+  program counter value got larger than 0xFFFFF, if the calculated
+  absolute address is a known symbolic entry show the symbolic name
+  instead of the relative address, in the case of showing the
+  relative address the corresponding absolute address is now printed
+  by this function and not by the function append_pc_comment(), so
+  there's no difference between VIEW_SHORT and VIEW_LONG any more
+- removed function append_pc_comment(), implementation is obsolete
+  now because absolute address printing is now done in function
+  append_r_addr()
+- changed function disasm_8() and disassemble(), changed function
+  prototypes by removing the view argument
+
+DISPLAY.C
+- bugfix in function StopDisplay(), the assumption that WM_PAINT
+  always redraw the complete display area was wrong; because
+  calculating the used display region is quite difficult the
+  complete emulator windows will be redrawn
+
+EMU28.C
+- bugfix in function Interfiles() and OnObjectLoad(), readded delay
+  after ON key state change, bug introduced in v1.07
+- changed function OnObjectLoad() and OnObjectSave(), adjusted to
+  new prototype of function GetLoadObjectFilename() and
+  GetSaveObjectFilename()
+- changed function Disasm(), adjusted to new prototype of function
+  disassemble()
+
+EMU28.DSP
+- added symbfile.c sources
+
+EMU28.H
+- added file filter definition
+- removed VIEW_SHORT and VIEW_LONG definition
+- changed function prototypes
+- extern declaration of global variable and functions
+
+EMU28.RC
+- added dialog IDD_DEBUG_SETTINGS
+- changed version
+
+FILES.C
+- changed function GetCutPathName(), removed warning when compiling
+  for x64 architecture
+- changed function IsDataPacked(), made a DWORD pointer copy of the
+  VOID pointer argument to avoid type casting, this generates the
+  same code on MSVC6.0 but made it GCC compiler compatible
+- changed function GetOpenFilename() and GetSaveAsFilename(),
+  removed some NULL characters at end of file filter definition
+  string
+- changed function GetLoadObjectFilename() and
+  GetSaveObjectFilename(), changed function prototype, added
+  arguments for the file filter and the default extension
+
+KEYMACRO.C
+- changed function OnToolMacroNew() and OnToolMacroPlay(), removed
+  some NULL characters at end of file filter definition string
+- changed function MacroProc(), removed warning when compiling for
+  x64 architecture
+
+KML.C
+- changed szText variable qualifier from LPTSTR to LPCTSTR
+- changed function CreateKmlList(), adjusted to new prototype of
+  function GetStringParam()
+- bugfix in function FatalError(), modifying the script buffer
+  content isn't allowed
+- changed function InitLex(), IncludeLines() and IncludeBlocks(),
+  adjusted to constant pointer of variable szText
+- changed function GetStringOf(), changed for better reading
+- changed function SkipWhite(), optimized and better readable
+  implementation
+- bugfix in function ParseToken(), optimized string delimiter
+  searching among other optimizations, removed increment of line
+  counter on LF character to correct the line numbering on UNIX
+  files with LF instead of CR LF at line end -> line counter
+  increment is done in function SkipWhite() on decoding next keyword
+  in function Lex() and modifying the script buffer content for
+  debug output isn't allowed
+- changed function ParseLine(), replaced main loop "goto" construct
+- changed function GetStringParam(), changed return variable
+  qualifier from LPTSTR to LPCTSTR
+
+PCH.H
+- added INVALID_SET_FILE_POINTER definition
+
+RESOURCE.H
+- added definitions for Debugger Settings handling
+
+RPL.C
+- renamed definition DOEREAL to DOEREL and adjusted usage in
+  function RPL_SkipOb() and RPL_ObjectSize()
+
+STACK.C
+- bugfix in function OnStackPaste(), added delay after ON key state
+  change
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "Symbolic" in section [Disassembler] in the INI-File
+
+SYMBFILE.C
+- new module for loading external symbols from a Saturn3 linker file
+
+
+Emu28 v1.16
+
+DEBUGGER.C
+- changed function OnLButtonUp(), NewValue(), EnterAddr() and
+  EnterBreakpoint(), replaced WM_GETTEXT message call with function
+  GetWindowText()
+
+DISASM.C
+- bugfix in function disassemble(), the NOP5 opcode returned wrong
+  address for next instruction (GOTO opcode skipping one nibble)
+
+EMU28.C
+- bugfix in function SaveChanges(), function GetSaveAsFilename()
+  returns a boolean and not a button id and removed call of last
+  document saving
+- changed function On Paint(), removed mixture of BitBlt() calls with
+  argument hPaintDC and hWindowDC inside critical section
+- bugfix in function OnFileSaveAs(), function GetSaveAsFilename()
+  returns a boolean and not a button id and removed call of last
+  document saving
+- changed function OnFileClose(), removed call of DisableDebugger()
+  because it's now done in function ResetDocument()
+- changed function OnTopics(), minor optimization by replacing
+  ShellExecuteEx() with ShellExecute()
+- changed function WinMain(), added last document saving at end of
+  program
+
+EMU28.H
+- extern declaration of global variable
+
+EMU28.RC
+- changed version and copyright
+
+FILES.C
+- changed function ResetDocument(), added call of DisableDebugger()
+- changed function GetLoadObjectFilename() and
+  GetSaveObjectFilename(), changed default file filter from *.* to
+  *.HP
+
+MOPS.C
+- changed function GetLPD(), added possibility to disable low
+  battery detection
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "Disable" in section [LowBat] in the INI-File
+
+
+Emu28 v1.15
+
+DDESERV.C
+- changed function DdeCallback(), changed to new BINARYHEADER28C
+  definition
+
+DISASM.C
+- disabled automatic inline code
+- fixed source file formatting error
+- changed function append_field(), defined as inline code
+- changed function append_r_addr(), code optimization
+
+EMU28.C
+- bugfix in function OnFileNew(), function SaveBackup() was called
+  when emulator engine was running -> this may caused inconsistent
+  backup data
+- changed function OnFileOpen(), added MruAdd() call
+- added new function OnFileMruOpen(), command handler for MRU menu
+  selections
+- changed function OnFileSaveAs(), minor optimizations and added
+  MruAdd() call
+- changed function OnObjectSave(), minor optimization
+- changed function MainWndProc(), added MRU message handler
+- changed function WinMain(), added StartupBackup handling and added
+  MRU initialization, startup file adding and cleanup
+
+EMU28.DSP
+- added mru.c sources
+
+EMU28.H
+- renamed define BINARYHEADER28 into BINARYHEADER28C and the
+  definition to "HPHP28-C" to separate it from Emu42
+- extern declaration of global variable and functions
+- changed function prototypes
+
+EMU28.RC
+- cosmetic changes in dialog IDD_CHOOSEKML to improve WinXP style
+- added Menuitem Files "Recent Files..."
+- changed version
+
+FILES.C
+- changed function GetCutPathName(), better support for UNC names
+- changed function SaveBackup(), added assertion for checking
+  emulator engine state
+- changed function WriteStack(), now checking the complete binary
+  header "HPHP28-C" to distinguish them from Emu42 object files,
+  adjusted to new prototype of function RPL28_ObjectSize() and added
+  new error state for bad objects
+- changed function LoadObject(), added error message for bad objects
+- changed function SaveObject(), changed to new BINARYHEADER28C
+  definition
+
+MRU.C
+- new module for MRU routines
+
+OPCODES.C
+- bugfix in function o158x(), o159x(), o15Cx(), o15Dx(), o15Ax(),
+  o15Bx(), o15Ex() and o15Fx(), used wrong cpu cycles
+- changed function o83n(), o88n() and o89n(), speed optimization
+
+OPS.H
+- changed function Tbit0(), Tbit1(), Ta(), Tb(), Tae() and Tbe(),
+  speed optimization
+
+RESOURCE.H
+- added definition for MRU handling
+
+RPL.C
+- bugfix in RPL_ObjectSize(), changed function prototype for adding
+  buffer size parameter preventing reading outside buffer area when
+  decoding bad objects
+
+SETTINGS.C
+- added function DelReg() for deleting a registry item
+- changed function ReadSettings() and WriteSettings(), added item
+  "StartupBackup" in section [Files]
+- added functions ReadSettingsString(), WriteSettingsString(),
+  ReadSettingsInt(), WriteSettingsInt() and DelSettingsKey(),
+  universal settings interface used for MRU data handling
+
+TIMER.C
+- bugfix in function TimeProc(), under certain conditions this
+  function is called with a zero uEventId and this may clash with a
+  reset timer event identifier
+
+
+Emu28 v1.14
+
+DDESERV.C
+- bugfix in function DdeCallback(), decoding of the item name wasn't
+  UNICODE compatible
+
+DEBUGGER.C
+- added new function OnSetCursor(), message handler for
+  "Activation Follows Mouse" implementation
+- changed function Debugger(), added "Always On Top" and
+  "Activation Follows Mouse" handling
+- bugfix in function OnToolDebug(), argument for owner window handle
+  was wrong, but over the years I has liked this debugger dialog
+  behavior so I put in the correct argument for this behavior
+
+DISPLAY.C
+- changed function ResizeWindow(), added "Always on top" feature
+
+EMU28.C
+- moved CF_HPOBJ definition to EMU28.H
+- removed global variable bClassicCursor
+- added function ForceForegroundWindow() forcing window to
+  foreground
+- changed function SettingsProc(), added "Always On Top" and
+  "Activation Follows Mouse" handling
+- changed function OnMouseMove(), added "Activation follows mouse"
+  feature
+- added function OnNcMouseMove() for "Activation follows mouse"
+  feature in non client area
+- changed function MainWndProc(), added WM_NCMOUSEMOVE message
+  handler
+- bugfix in function WinMain(), moved additional DDE stuff just
+  behind DDE server initialization, adjusted length for cut
+  filenames preventing negative values and call ShowWindow() before
+  asking for a new document preventing a KML script dialog without a
+  parent window
+
+EMU28.H
+- added CF_HPOBJ definition from EMU28.C
+- removed declaration of bClassicCursor
+- extern declaration of global variables and functions
+
+EMU28.RC
+- added item "Always On Top" and "Activation Follows Mouse" in
+  settings dialog
+- changed version and copyright
+
+FILES.C
+- added global variable saving the patched ROM checksum
+- changed function SetWindowPathTitle(), adjusted length for cut
+  filename
+- changed function CrcRom(), change function prototype, added
+  unpacked data check and made function public
+- bugfix in function CrcRom(), hadn't detected address content
+  changes at addresses ending with a 0x2 and 0x3 because only lower
+  16 bit of checksum was used -> modified function cause a warmstart
+  because of new checksum
+- changed function UnmapRom(), added reset of ROM checksum variable
+- new function IsDataPacked() for unpacked data check
+- changed function OpenDocument(), use ROM checksum made in
+  InitKML() and added checks for packed memory data
+- changed function SaveDocument(), adjusted to new prototype of
+  CrcRom()
+
+KML.C
+- bugfix in function KillKML(), class member variable wasn't reset
+- bugfix in function TransparentCircle(), there was no radius value
+  check for preventing division by 0 and color low adjust value
+  wasn't reached because of wrong color offset divisor -> adjusted
+  LOWADJ definition to get similar output to buggy earlier version
+- changed function MouseMovesTo(), removed bClassicCursor switch
+  for using arrow cursor over button
+- changed function InitKML(), added full check for unpacked ROM
+  image and build checksum of patched ROM
+
+MOPS.C
+- bugfix in function WriteIO(), display sync error flag reset in the
+  DSPCTL (0x303) register hasn't worked on CPU reset condition
+
+OPCODES.C
+- bugfix in function o807(), Chipset.in register must be refreshed
+  before checking for a pressed key
+
+PCH.H
+- added include stddef.h
+- restricted DWORD_PTR type definition for MSVC6.0 and earlier
+
+RESOURCE.H
+- added some definitions
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "ActFollowsMouse" and "AlwaysOnTop" in section [Emulator], removed
+  item "ClassicCursor" from [KML] section in the INI-File
+
+TIMER.C
+- changed function CalcT2(), in the case of a pending timer2
+  interrupt return always the timer2 value 0xFFFFFFFF
+
+
+Emu28 v1.13
+
+DDESERV.C
+- removed warnings when compiling under VS2005
+- changed function DdeCallback(), case XTYP_POKE and XTYP_REQUEST
+  now decode the item name for the stack level
+
+DEBUGGER.C
+- removed warnings when compiling under VS2005
+
+EMU28.C
+- removed warnings when compiling under VS2005
+
+EMU28.H
+- changed function prototypes
+
+EMU28.RC
+- changed version
+- replaced CREATEPROCESS_MANIFEST_RESOURCE_ID definition in manifest
+  declaration by 1
+
+EXTERNAL.C
+- changed function BeepWave(), removed VS2005 warning
+- changed function BeepWin9x(), disabled implementation for x64
+  architecture
+
+FILES.C
+- changed function PatchRom(), removed VS2005 warning
+- changed function WriteStack(), added stack level argument
+- changed function LoadObject(), adjusted call of WriteStack() to
+  new function prototype
+
+IO.H
+- renamed LBICTL to LPD
+
+KEYBOARD.C
+- bugfix in function ScanKeyboard(), if keyboard reading wasn't
+  active a released ON key wasn't cleared in the "in" register
+
+KEYMACRO.C
+- removed warnings when compiling under VS2005
+- changed function OnToolMacroNew(), minor optimization writing
+  macro file header
+
+KML.C
+- removed warnings when compiling under VS2005
+- changed function DisplayChooseKml(), changed return type of dialog
+  box
+- changed function ParseLine(), change typecast of szLexString from
+  DWORD to DWORD_PTR
+
+KML.H
+- changed variable type of nParam[] element of KmlLine structure
+  because element is also used as pointer
+
+MOPS.C
+- renamed LBICTL to LPD
+- changed function Npeek() and Nread(), adjusted to new prototypes
+  of ReadIO() and ReadSlaveIO()
+- new function GetLPD() for reading the LPD state
+- changed prototypes of function ReadIO() and ReadSlaveIO(), added
+  update argument
+- bugfix in function ReadIO(), WriteIO(), ReadSlaveIO() and
+  WriteSlaveIO(), added implementation of the LPD (0x300) register
+- changed function WriteIO(), added IAM bit implementation in the
+  DSPTEST (0x302) register for timer emulation
+- bugfix in function WriteSlaveIO(), a DON bit change in the DSPCTL
+  (0x303) register hadn't affect on the annunciators
+
+PCH.H
+- added _CRT_SECURE_NO_DEPRECATE definition
+- added DWORD_PTR type definition
+
+RESOURCE.H
+- removed CREATEPROCESS_MANIFEST_RESOURCE_ID and RT_MANIFEST
+  definition
+
+RPL.C
+- added definition of EDITLINE
+- added function RPL_Depth() returning stack depth
+- changed function RPL_Pick(), added check of stack depth
+- changed function RPL_Push(), new implementation with stack level
+  argument
+
+STACK.C
+- adjusted calls of RPL_Push() to new function prototype
+- changed function RPL_SetBcd(), removed compiler warning
+- bugfix in function OnStackPaste(), case "any other format" must be
+  treated as string and not as binary object
+
+TIMER.C
+- removed warnings when compiling under VS2005
+- bugfix in function StartTimers(), timers are stopped if the IAM
+  bit in the DSPTEST (0x302) register of the master chip with the
+  quarz crystal isn't set
+- bugfix in function StopTimers(), on stopping master timer slave
+  timers wasn't stopped automatically
+
+
+Emu28 v1.12
+
+DISASM.C
+- bugfix in function disasm_8(), the ?HS=0 n opcode showed always as
+  ?=0 opcode
+
+DISPLAY.C
+- bugfix in function StopDisplay(), in most times display wasn't
+  cleared in calculator off state (bug introduced in v1.10)
+
+EMU28.C
+- changed function OnFileClose(), removed call of KillKML() because
+  will be done in ResetDocument()
+- bugfix in function OnViewScript(), removed error message because
+  it's wrong when script is ok, but log report was leaved with
+  Cancel button, also if clause of error message box was never
+  reached because error message box had no Cancel button
+- changed function OnViewScript(), added call of
+  SetWindowPathTitle() to adjust length of window title
+- changed function WinMain(), simplified document loading at startup
+  and replaced full filename title with length cut filename
+
+EMU28.H
+- extern declaration of global functions
+
+EMU28.RC
+- changed version
+
+FILES.C
+- moved function WriteStack() inside file
+- added new function GetCutPathName(), creating a length cut
+  filename
+- added new function SetWindowPathTitle(), replacement for calling
+  SetWindowTitle() for getting length cut filenames as title
+- changed function MapRom(), removed some useless variable settings
+  and optimized ROM unpacking
+- changed function OpenDocument(), SaveDocumentAs() and
+  RestoreBackup(), replaced call of function SetWindowTitle() with
+  SetWindowPathTitle()
+- changed function GetOpenFilename(), GetSaveAsFilename(),
+  GetLoadObjectFilename() and GetSaveObjectFilename(), moved
+  storage place of local file buffer from heap to stack
+
+KML.C
+- bugfix in function CreateKmlList(), fixed possible call of API
+  function lstrcmpi() with NULL pointer at Hardware detection and
+  select only KML files with a valid Model statement
+- bugfix in function Lex(), EOF without LF at end of non empty line
+  wasn't detected as EOL
+
+
+Emu28 v1.11
+
+DISPLAY.C
+- changed function UpdateContrast(), added background color to
+  display bitmap
+- changed function WritePixelQuad(), draw only one pixel instead of
+  four pixels now; added 3rd background color
+- bugfix in function UpdateMainDisplay(), added emulation of display
+  row bitmap (0x1E0-0x2DF)
+- bugfix in function UpdateAnnunciators(), adjusted contrast table
+  entry to lesser contrast
+
+EMU28.H
+- added definition with valid calculator models
+- added macro with model validation code
+
+EMU28.RC
+- changed version
+
+FETCH.C
+- changed function EvalOpcode(), included assertion for detecting
+  access to packed memory data
+
+FILES.C
+- bugfix in function OpenDocument(), after reading CPU state, ext.
+  RAM pointer must immediately be deleted because on error condition
+  function ResetDocument() tries to free this memory; added check
+  for valid calculator model
+
+KML.C
+- bugfix in function InitButton(), nested scancode block commands
+  hadn't handled correctly
+- changed function InitKML(), changed checking for valid Model
+  argument and changed the corresponding error message
+
+
+Emu28 v1.10
+
+DDESERV.C
+- bugfix in function DdeCallback(), used wrong return in XTYP_POKE
+  case for calculator models without stack
+
+DEBUGGER.C
+- changed function UpdateMemoryWnd(), added follow dispatcher
+- new function OnMemFollow() to handle follow menu entries
+- changed function OnDblClick() and OnKeyUpDown(), replaced all
+  function calls of UpdateMemoryWnd() with ViewMemWnd() because of
+  the modified behavior of UpdateMemoryWnd()
+- changed function Debugger(), added "Follow" menu entry
+  initialization in WM_INITDIALOG and menu commands handler in
+  WM_COMMAND section
+
+DISPLAY.C
+- changed function WritePixelQuad(), added Zoom factor 3 handling
+- changed function StopDisplay(), removed display clear
+
+EMU28.C
+- changed function SaveChanges(), default button for confirming the
+  "Do you want to save changes ?" message depends now on the
+  "SaveDefaultConfirm" INI-File setting (1=yes / 0=no button)
+
+EMU28.H
+- expanded MMUMAP enumeration
+- extern declaration of global variable
+
+EMU28.RC
+- changed IDD_KMLLOG, replaced "Always" text with "Show Script
+  compilation result next time"
+- added "Follow" menu entries in debugger "Memory" context menu
+- changed version
+
+FILES.C
+- bugfix in function NewDocument(), the backup now behave like with
+  function OpenDocument() -> the backup now contain the emulator
+  state before the new session and not the new session itself
+- changed function ResetDocument(), NewDocument(), OpenDocument(),
+  SaveDocument(), SaveBackup(), RestoreBackup() and ResetBackup(),
+  added external RAM handling
+- bugfix in function RestoreBackup(), window title wasn't updated
+- bugfix in function CreateBIPalette(), for 16 and 32 bitcount
+  bitmaps no logical palette was created
+- bugfix in function LoadBitmapFile(), function blocked loading
+  bitmap when ROM file was missing
+
+KML.C
+- changed table szLexDelim[], removed first element
+- added new table eIsGlobalBlock[] with valid block tokens
+- added new function IsGlobalBlock(), checking if token inside
+  eIsGlobalBlock[] table
+- changed function Lex(), added assertion for mode checking
+- changed function ParseLines(), added syntax checking for command
+  tokens and removed "Open block." message
+- changed function ParseBlocks(), added syntax checking for block
+  tokens
+- changed function InitLcd(), TOK_ZOOM argument wasn't checked, on
+  illegal zoom values use 1 as default now
+- bugfix in function LoadKMLGlobal(), keyword "Global" had only been
+  detected as first command in KML script
+
+KML.H
+- adjusted definitions of LEX_BLOCK, LEX_COMMAND and LEX_PARAM to
+  modified table szLexDelim[]
+
+MOPS.C
+- added new function ModuleId() for calculating the RAM Id from the
+  module size
+- bugfix in function MapNCE(), size calculation for mirroring was
+  wrong
+- added new function MapEXT() for mapping external RAM
+- changed function MapROM(), added calls of MapEXT()
+- changed function Config(), Uncnfg(), Reset(), C_Eq_Id() and
+  MapData(), added external RAM handling
+- bugfix in function Uncnfg(), changed unconfig order between master
+  and slave controller, master is unconfigurated first
+- bugfix in function MapData(), priority order was wrong, adjusted
+  to the one used in function Map()
+
+RESOURCE.H
+- added several definitions
+
+RPL.C
+- added new function RPL_GarbageCol() for doing a garbage collection
+- changed function RPL_CreateTemp(), added garbage collection on low
+  memory condition
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "SaveDefaultConfirm" in section [Files] in the INI-File
+
+TYPES.H
+- added new variables for external RAM handling
+
+
+Emu28 v1.09
+
+DISPLAY.C
+- changed function UpdateMainDisplay(), removed DEBUG_DISPLAY
+  implementation
+- bugfix in function UpdateContrast(), used background Color 0 in
+  calculator off state even if Color 32 was defined, added critical
+  section for DIB section update because of asynchronous display
+  update now and added update of annunciators
+- bugfix in function CreateLcdBitmap(), DIB section shouldn't
+  created from the memory DC
+- deleted function WriteToMainDisplay(), not necessary for the new
+  display implementation any more
+- added functions LcdProc(), StartDisplay() and StopDisplay() for
+  new the implementation of the display engine
+
+EMU28.C
+- changed function SettingsProc(), added sound handling
+- moved function OnStackCopy() and OnStackPaste() to STACK.C
+- changed function WinMain(), added accelerator key access for menus
+
+EMU28.DSP
+- added stack.c sources
+
+EMU28.H
+- removed definitions of DISP_ANNUN and DISP_MAIN
+- removed reference of variable disp
+- removed function prototype of WriteToMainDisplay()
+- extern declaration of global functions
+
+EMU28.RC
+- added "Sound" group in Settings dialog
+- changed menu text "Copy String" to "Copy Stack" and menu text
+  "Paste String" to "Paste Stack"
+- added accelerator resource
+- changed version and copyright
+
+ENGINE.C
+- bugfix in function WorkerThread(), when changing into SM_RUN state
+  display contrast must also be restored
+- changed function WorkerThread(), when changing into SM_RUN state
+  display engine must be started and when leaving SM_RUN state
+  display engine must be stopped now
+
+FILES.C
+- added function RomType() returning the current ROM version
+
+IO.H
+- added MROW_BEGIN and MROW_END definitions
+
+KML.C
+- bugfix in function SkipWhite(), skipping remark text hadn't stop
+  at string end
+- bugfix in function ParseBlocks(), stopped script parsing without
+  error at unknown block token
+- bugfix in function SkipLines(), TOK_END was handled wrong -> this
+  caused a RunKey end if condition of TOK_IFPRESSED or TOK_IFFLAG
+  was false and there was no TOK_ELSE inside this level
+- bugfix in function KillKML(), ROM type wasn't reset to the preset
+  value at the end
+
+MOPS.C
+- changed MMU page size bits from code constants to a definition
+- deleted function UpdateDisplay(), not necessary for the new
+  display implementation any more
+- changed function Nwrite(), removed calling of functions
+  UpdateDisplay() and UpdateAnnunciators()
+- changed function WriteIO(), control of the DSPCTL (0x303) register
+  calls now the functions StartDisplay() and StopDisplay() to
+  start/stop the display engine and removed DISP_MAIN references
+- changed function WriteIO(), replaced DISP_ANNUN references by an
+  annunciator implementation in function WriteSlaveIO()
+- changed function WriteSlaveIO(), added annunciator implementation
+
+OPS.H
+- added MMU page and address size definitions
+
+RPL.C
+- added function RPL_GetSystemFlag() returning the state of the
+  given flag
+
+RESOURCE.H
+- added several definitions
+
+STACK.C
+- new module with the message handler functions OnStackCopy() and
+  OnStackPaste() prior located in EMU28.C
+- changed function OnStackCopy() and OnStackPaste(), they can now
+  also copy real numbers from and to the clipboard
+
+TIMER.C
+- changed function CheckT(), minor optimization in checking if INT
+  or WAKE bit is set
+
+
+Emu28 v1.08
+
+DISPLAY.C
+- bugfix in function CreateMainBitmap(), in error case hMainDC
+  variable wasn't cleared
+
+EMU28.H
+- extern declaration of global variables
+
+EMU28.RC
+- changed menu text order from "Copy Stack/Copy Screen/Paste Stack"
+  to "Copy Screen/Copy Stack/Paste Stack"
+- changed version
+
+EXTERNAL.C
+- added function BeepWave(), beeper function using sound card
+- added function BeepWin9x(), PC speaker function for working on
+  Win9x
+- changed function External(), removed range checking of duration;
+  call function BeepWin9x() on Win9x instead of Beep() or in the
+  case of wave sound the function BeepWave()
+
+FILES.C
+- changed function PatchRom(), changed ASCII string handling from
+  BYTE to CHAR data type
+
+KML.C
+- changed function AddToLog(), changed argument qualifier and minor
+  code optimization
+- bugfix in function InitKML(), changed log message for no "Model"
+  definition found and a missing "Bitmap" definition wasn't detected
+
+OPS.H
+- changed function Nsrb(), speed optimization
+
+PCH.H
+- added include conio.h
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "WaveBeep" and "WaveVolume" in section [Emulator] in the INI-File
+
+
+Emu28 v1.07
+
+DDESERV.C
+- changed function DdeCallback(), removed delays after ON key state
+  change
+
+DEBUGGER.C
+- bugfix in function Debugger(), used function to set icon which
+  hasn't worked properly under WinXP
+
+EMU28.C
+- changed function OnStackPaste(), minor code optimization
+- changed function Interfiles(), OnStackPaste() and OnObjectLoad(),
+  removed delays after ON key state change
+- changed function declaration of function OnTopics()
+- bugfix in function WinMain(), szCurrentKml wasn't initialized
+
+EMU28.RC
+- changed version
+
+FILES.C
+- changed function WriteStack(), minor optimization when saving as
+  string
+- bugfix in function OpenDocument(), check for empty KML file name
+  was wrong, so the error handler of the following InitKML() was
+  always called in this case
+- bugfix in function OpenDocument(), reload KML button state from
+  last document close
+- changed function LoadObject(), file access is now shared
+- changed function DibNumColors() and CreateBIPalette(), changed
+  argument qualifier
+
+KML.C
+- changed variable qualifier of eIsBlock[] table and removed
+  TOK_NONE item from it
+- bugfix, global variables pKml and pKmlList hadn't be initialized
+- removed usage of global variables bKmlLogOkEnabled and nKmlFiles
+- changed function PrintfToLog(), use a local buffer instead of the
+  heap for the output buffer of the wvsprintf() function, this helps
+  to reduce fragmentation of the heap
+- changed function KMLLogProc(), minor code optimization and removed
+  use of global variable bKmlLogOkEnabled and windows redraw in the
+  WM_INITDIALOG case
+- changed function DisplayKMLLog(), removed use of global variable
+  bKmlLogOkEnabled and transfer state of bOkEnabled over the lParam
+  argument to the dialog box procedure
+- bugfix in function CreateKmlList(), fixed a memory leak in the
+  case of no title
+- changed function ChooseKMLProc(), minor code optimization
+- changed function IsBlock(), minor code optimization
+- bugfix in function ParseString(), fixed memory leak in error case
+  and optimized implementation
+- changed function IncludeLines(), IncludeBlocks(), LoadKMLGlobal()
+  and InitKML(), file access is now shared
+- added function ReloadButtons(), update internal button state from
+  chip keyboard matrix content
+
+KML.H
+- added ReloadButtons() function prototype
+
+OPS.H
+- bugfix in function Nsub() and Nrsub(), in some situations wrong
+  results in dec mode with illegal decimal number entry as 2nd
+  operator
+
+TIMER.C
+- bugfix in function RescheduleT2(), better accuracy on conversation
+  of timer2 ticks into multimedia timer ms
+- changed function StartTimers(), added calculation of maximum
+  timer2 ticks that can be handled by one timer event
+- changed function StartTimers() and StopTimers(), changed
+  multimedia timer to best possible timer resolution instead of
+  risking to fail with 1 ms resolution preset
+
+
+Emu28 v1.06
+
+CHECKBOX.BMP
+- fixed one pixel with wrong color
+
+EMU28.C
+- changed function UpdateWindowStatus(), added macro specify menu
+  control
+- changed function CopyItemsToClipboard(), simplified implementation
+  in UNICODE mode by saving the data in the CF_UNICODETEXT format
+- changed function OnLButtonDown(), OnLButtonUp(), OnMouseMove(),
+  OnKeyDown() and OnKeyUp(), disable function handling when in macro
+  play mode
+- changed function MainWndProc(), added some macro handler functions
+
+EMU28.DSP
+- added keymacro.c sources
+
+EMU28.H
+- extern declaration of global variables and functions
+
+EMU28.RC
+- changed "Always" checkbox in "KML Script Compilation Result"
+  dialog from a pushlike to normal one for better readability under
+  Windows XP style
+- added "Macro Settings" dialog
+- added Menuitem Tools "Macro..."
+- changed version and copyright
+
+ENGINE.C
+- bugfix in function AdjustSpeed(), on large operations the
+  workaround condition for Win2k was detected and the following
+  synchronizing failed because the CPU didn't got the free running
+  cycles for the waited time
+- changed function WorkerThread(), close running keyboard macros
+  when switching into invalid state
+
+KEYBOARD.C
+- changed function KeyboardEvent(), added call to key recording
+  function KeyMacroRecord()
+- bugfix in function KeyboardEvent(), prevent buffer overflow with
+  too big out codes on Chipset.Keyboard_Row array
+
+KEYMACRO.C
+- new module supporting keyboard macro functions
+
+KML.C
+- added function PlayKey(), handle button with OutIn code
+
+KML.H
+- added PlayKey() function prototype
+
+MOPS.C
+- bugfix in function WriteIO() and WriteSlaveIO(), writing to timer
+  failed if first writing address was before the timer address area
+
+PCH.H
+- added VERIFY macro
+
+RESOURCE.H
+- added several definitions
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added section
+  [Macro] in INI-File
+
+
+Emu28 v1.05
+
+EMU28.C
+- added function OnTopics() to call help file
+- changed function MainWndProc(), added ID_HELP_TOPICS to command
+  message handler
+
+EMU28.RC
+- changed version and copyright
+- added Menuitem Help "Help Topics" in main menu
+
+FILES.C
+- added functions UpChk(), Checksum(), CorrectChecksum() and
+  RebuildRomChecksum() for recalculation of ROM checksums
+- changed function PatchRom(), added recalculation of ROM checksums
+  at end of ROM patching
+
+OPS.H
+- changed function Nadd(), optimized "illegal number in dec mode"
+  detection
+- changed function Ninc(), Ndec(), Nsub() and Nrsub(), removed
+  register wrap handling
+- changed function Nneg(), optimized non zero value handling
+- bugfix in function Nsrc(), the Sticky Bit (SB) wasn't handled in
+  all rSRC opcodes
+
+RESOURCE.H
+- added definition
+
+
+Emu28 v1.04
+
+CURSOR.C
+- new module to create a hand cursor
+
+DDESERV.C
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+
+DEBUGGER.C
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+
+DISASM.C
+- changed several variable qualifiers from TCHAR * to LPCTSTR and
+  replaced rest of TCHAR * by LPTSTR
+- changed variable qualifier of hp_reg_1_af and hp_reg_2_af
+- changed function append_tab(), speed optimization
+- changed function append_field(), removed use of temporary variable
+
+DISPLAY.C
+- replaced variable use of hOldLcdBitmap with hLcdBitmap
+- replaced variable use of hOldMainBitmap with hMainBitmap
+
+EMU28.DSP
+- added cursor.c sources
+
+EMU28.C
+- changed variable qualifier of szLicence
+- added global variables
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+- bugfix in function CopyItemsToClipboard(), don't worked in UNICODE
+  mode because character translation was missing
+- changed function OnCreate() and OnDestroy(), added load and
+  destroy of two new cursor resources
+- changed function WinMain(), removed class cursor from main window
+
+EMU28.H
+- extern declaration of global variables and functions
+- moved T2CYCLES definition from OPCODES.H
+- changed function DuplicateString(), replaced LocalAlloc() with
+  HeapAlloc() memory request
+
+EMU28.RC
+- changed version and copyright
+- changed resource language description to English
+
+FILES.C
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+
+KML.C
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+- bugfix in function PrintfToLog(), temporary buffer was half of
+  size in UNICODE mode
+- bugfix in function BrowseFolder(), the shell's allocator release
+  was missing in one case
+- changed function ChooseKMLProc(), optimized IDC_EMUDIRSEL command
+  case
+- bugfix in function ParseString(), strings greater 127 characters
+  caused a buffer overflow in UNICODE mode
+- bugfix in function KillKML(), set variables bDebug, nKMLFlags and
+  nLcdZoom to there startup values
+- changed function MouseMovesTo(), added code part to select cursor
+
+OPCODES.C
+- bugfix in function o3X() and o8082X(), used wrong cpu cycles
+
+OPCODES.H
+- moved T2CYCLES definition to EMU28.H
+
+PCH.H
+- added IDC_HAND definition for non Win2k OS project
+
+RPL.C
+- replaced all LocalAlloc() with HeapAlloc() memory requests
+
+SETTINGS.C
+- changed function ReadSettings() and WriteSettings(), added item
+  "ClassicCursor" in section [KML] in the INI-File
+
+TIMER.C
+- bugfix in function CalcT(), estimated timer ticks were sometimes
+  to large because there was a misbehavior between real time clock
+  and counted CPU cycles when in free running mode
+- changed function RescheduleT(), optimized initialization of
+  synchronization variables used in CalcT()
+- changed function ReadT(), minor optimization calculating the timer
+  value
+
+
+Emu28 v1.03
+
+DEBUGGER.C
+- bugfix in function NewValue(), EnterAddr(), EnterBreakpoint(),
+  EditBreakpoint() and InfoIntr(), uncompleted wParam argument
+  decoding in WM_COMMAND case
+- replaced function OnToggleCheck() with ToggleBreakpointItem(), a
+  more general function to toggle a breakpoint check box
+- changed function EditBreakpoint(), adjusted LBN_DBLCLK case to use
+  the new ToggleBreakpointItem() function and modified behavior of
+  VK_SPACE to toogle all selected items
+
+EMU28.C
+- added Critical Section initialization for CPU slow down
+- changed function SetWindowTitle(), changed argument qualifier
+- bugfix in function SettingsProc(), Disasm() and About(),
+  uncompleted wParam argument decoding in WM_COMMAND case
+- bugfix in function MainWndProc(), wrong wParam argument decoding
+  in WM_SYSCOMMAND case
+- bugfix in function WinMain(), fixed possible buffer overflows in
+  state file loading message
+
+EMU28.H
+- extern declaration of global function
+
+EMU28.RC
+- changed version
+- changed IDC_DEBUG_MEM from static to listbox control, looks better
+  in connection with WinXP style
+
+ENGINE.C
+- bugfix in function AdjustSpeed(), AdjKeySpeed() and SetSpeed(),
+  reference setting wasn't synchronized
+
+FILES.C
+- changed buffer size information of files and path's from 260 to
+  MAX_PATH definition
+- removed global variable hRomFile, using local now
+- removed variable "hRomMap", remainder of older implementation
+- changed function MapRom(), minor optimization in ROM image loading
+- bugfix in function GetOpenFilename(), GetSaveAsFilename(),
+  GetLoadObjectFilename() and GetSaveObjectFilename(), adjusted
+  size of temporary buffer to size of destination buffer and fixed
+  memory allocation bug in UNICODE mode
+- changed function LoadBitmapFile(), it's better to validate the
+  pbyRom instead of the hRomFile variable to check if the ROM is
+  loaded to avoid possible side effects (ROM loaded by resource) and
+  removed uncalled code part
+
+KML.C
+- bugfix in function KMLLogProc(), uncompleted wParam argument
+  decoding in WM_COMMAND case and update of the bAlwaysDisplayLog
+  variable only in the IDOK and IDCANCEL case
+- bugfix in function ChooseKMLProc(), uncompleted wParam argument
+  decoding in WM_COMMAND case and added UNREFERENCED_PARAMETER
+  statement
+- bugfix in function ParseLines() and ParseBlocks(), fixed problem
+  of uninitialized variable which may occur on parsing corrupt KML
+  files
+
+
+Emu28 v1.02
+
+DEBUGGER.C
+- added function UpdateDbgCycleCounter() to handle a 64 bit CPU
+  cycles counter in debug mode
+- added implementation of "Profiler" dialog box
+
+DEBUGGER.H
+- extern declaration of global function
+
+EMU28.C
+- changed function WinMain(), added non modal "Profiler" dialog box
+  in main message handler
+
+EMU28.H
+- extern declaration of global variable
+- changed prototype of function AdjKeySpeed()
+
+EMU28.RC
+- changed version and copyright
+- bugfixes in dialogs, some WS_EX_ styles (especially window
+  borders) don't worked on some operating systems
+- added Menuitem Info "Profiler..." in debugger menu
+- added "Profiler" dialog
+
+ENGINE.C
+- bugfix in function Debugger(), fixed problem at quitting debugger
+  when last executed opcode was SHUTDN
+- changed function Debugger(), added call for 64 bit cpu cycle
+  counter adjust
+- changed function AdjKeySpeed(), changed back to v1.00 version,
+  slow down on every key pressed
+
+KEYBOARD.C
+- changed function KeyboardEvent(), changed call of AdjKeySpeed()
+
+KML.C
+- changed function DrawAnnunciator(), changed making of gray scale
+  mask
+
+RESOURCE.H
+- added definitions
+
+TIMER.C
+- bugfix in accurate timer handling, variable wasn't initialized so
+  it might haven't worked
+
+
+Emu28 v1.01
+
+DEBUGGER.C
+- bugfix in function Debugger(), removed illegal call of
+  DestroyMenu() in WM_DESTROY message handler
+
+DISPLAY.C
+- changed function UpdateAnnunciators(), added gray scale emulation
+  of annunciators
+
+EMU28.C
+- changed function OnCreate(), don't enable DragAcceptFiles() here
+- changed function Interfiles(), checking calculator model to
+  disable stack writing isn't necessary any more
+
+EMU28.H
+- changed prototype of function AdjKeySpeed()
+
+EMU28.RC
+- changed version and copyright
+
+ENGINE.C
+- changed function AdjKeySpeed(), a detected pressed key is now a
+  boolean argument from caller; this allows to detect a pressed, but
+  not by KBD_OR selected key -> no CPU slow down in this case
+
+FILES.C
+- removed unused variables
+- changed functions CrcRom(), MapRom() and UnmapRom(), can handle
+  packed ROM files now
+
+KEYBOARD.C
+- bugfix in function KeyboardEvent(), CPU slow down by calling the
+  function AdjKeySpeed() on key pressed must be activated here
+
+KML.C
+- changed function DrawAnnunciator(), added gray scale emulation of
+  annunciators
+- changed function InitKML(), enable object "Drag and Drop"
+  calculator model dependent here now
+
+KML.H
+- changed prototype of function DrawAnnunciator()
+
+MOPS.C
+- bugfix in function MapData(), wrong implementation of ROM area
+  detection
+- changed function WriteIO(), added annunciators update in CONTRAST
+  register (0x301, 0x302) emulation
+
+OPCODES.C
+- changed function o802() and o803(), removed AdjKeySpeed() call
+
+
+(c) by Christoph Gieﬂelink, c dot giesselink at gmx dot de

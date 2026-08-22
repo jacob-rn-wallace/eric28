@@ -1,0 +1,21 @@
+# Never commit ROM images. Emu28's own author has no license to publish
+# them ("I have no license to publish them, so they aren't included in
+# the emulator package" - hp.giesselink.com/emu28.htm); this project
+# follows the same rule vger and soynut already follow for their own
+# ROM dependencies. Supply your own dump and point the emulator at it
+# at runtime - it is never checked in here.
+*.e28
+*.E28
+roms/
+*.rom
+*.ROM
+*.bin
+!vendor/**/*.bin
+
+# Build artifacts
+build/
+*.o
+*.obj
+
+# Editor/OS cruft
+.DS_Store
