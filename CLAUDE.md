@@ -2,7 +2,10 @@
 
 Orientation doc for this repo, following the same convention as this
 author's other calculator projects (`vger`, `soynut`). Read this before
-touching anything here.
+touching anything here. See `DEVLOG.md` for the full story of how this
+project got started - the Wine dead end, the `emu41gcc` question that
+actually turned up the real precedent, and why this repo exists at all -
+this file only covers current state and what's next.
 
 ## What this is
 
