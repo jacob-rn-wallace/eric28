@@ -70,9 +70,54 @@ vendor/emu28-upstream/   Pristine, unmodified Emu28 v1.39 source
                          clean drop-in.
 skins/hp28c/             Official HP-28C KML skin (faceplate bitmap +
                          key layout), also from hp.giesselink.com.
-shim/                    (not yet created) New code only: Win32-type/
-                         API compatibility layer + SDL2 platform layer.
-                         GPL-2.0 as a derivative work.
+shim/                    New code only: Win32-type/API compatibility
+                         layer + SDL2 platform layer. GPL-2.0 as a
+                         derivative work.
+  win32_types.h          Win32 types-and-primitives header (milestone
+                         1). Fixed-width types, ANSI TCHAR/_T(), the
+                         handful of opaque handle typedefs EMU28.H
+                         needs to parse, and real gcc/clang
+                         implementations of the CRT-ish primitives
+                         (ZeroMemory, GetTickCount, critical sections,
+                         GetLocaleInfo's one call pattern, ...).
+                         GDI/window/registry/sound/clipboard/thread-
+                         sync functions are declared here (so callers
+                         type-check) but deliberately left
+                         unimplemented - see the file's own section
+                         comments for which category each belongs to.
+  gdi.h, gdi.c           GDI-drawing shim (milestone 3): a software
+                         rasterizer implementing the Win32 GDI subset
+                         DISPLAY.C uses to composite the LCD/
+                         annunciator display - memory device contexts
+                         backed by an owned 32-bpp (or, for the one
+                         DIB-section mask bitmap, 8-bpp paletted)
+                         pixel buffer, BitBlt/PatBlt against them
+                         (including a general ternary-ROP evaluator -
+                         see gdi.c's rop3() - so DISPLAY.C's own two
+                         custom ROP hex literals work without this
+                         shim needing to know their names), solid
+                         brushes, and a narrow BMP-file loader (real
+                         device contexts and window-management calls
+                         are NOT here - see win32_types.h's "window
+                         management" section, they need milestone 4's
+                         actual SDL2 window). KML.C needs a superset
+                         of this (StretchBlt, GetObject, CreateBitmap,
+                         plus several window/shell APIs entirely
+                         outside GDI) - not yet attempted.
+  compat/                Fake Win32 SDK / MSVC CRT headers
+                         (windows.h, tchar.h, winsock2.h, shellapi.h,
+                         commctrl.h, shlobj.h, crtdbg.h, malloc.h,
+                         direct.h, conio.h). Each just forwards to
+                         win32_types.h (or, for malloc.h, to the real
+                         <stdlib.h>). This is how vendor/'s PCH.H gets
+                         satisfied without editing it: PCH.H's
+                         `#include <windows.h>` etc. are angle-bracket,
+                         so they resolve via the compiler's -I search
+                         path to these stubs instead of a real Windows
+                         SDK - quote-form includes (`#include "pch.h"`
+                         itself) still resolve to vendor/'s own files
+                         first, which is why PCH.H can't be replaced
+                         this way, only what it includes.
 COPYING.TXT              GPL-2.0 license text (from
                          hp.giesselink.com/COPYING.TXT).
 ```
@@ -113,6 +158,55 @@ compatibility header regardless (same role as `emu28android`'s
 `win32-layer.h`), but the real platform-specific *behavior* work is
 narrowly scoped to those 8 distinct files.
 
+That table was compiled by reading the source; actually compiling all
+19 non-GDI/window/registry/sound files against `shim/win32_types.h`
+turned up several more genuinely OS-specific categories those
+"portable" files call into, that the grep-based survey above missed
+because they're not GDI/window/registry/sound:
+
+| Category | Representative files | Real implementation or declared-only? |
+|---|---|---|
+| Power status (`GetSystemPowerStatus`, low-battery auto-shutdown) | `MOPS.C` | Declared only |
+| Thread/event sync (`WaitForSingleObject`, `SetEvent`, `CreateEvent`, `CreateThread`, `INFINITE`) | `ENGINE.C`, `KEYMACRO.C` | Declared only |
+| Clipboard (`OpenClipboard`, `GlobalAlloc`/`Lock`/`Unlock`/`Free`, `CF_TEXT`) | `STACK.C` | Declared only |
+| Locale (`GetLocaleInfo` for the decimal-point character) | `STACK.C` | Real (via `localeconv()`) |
+| winmm timer (`timeGetTime` vs. the periodic-callback family) | `ENGINE.C`, `TIMER.C` | `timeGetTime` real (aliases `GetTickCount`); `timeSetEvent`/`timeBeginPeriod`/etc. declared only |
+| File I/O (`CreateFile`/`ReadFile`/`WriteFile`/`CloseHandle`/`SetFilePointer`) | `KEYMACRO.C`, `SYMBFILE.C` | Real (POSIX fd wrapped in `HANDLE`) |
+| Winsock (`socket`/`sendto`/`gethostbyname`, `SOCKADDR_IN`) | `UDP.C` | Real (see below) |
+| DDE (`DdeCreateDataHandle`, `XTYP_*`) | `DDESERV.C` | Declared only - may never be implemented (no macOS/Linux/SDL2 equivalent) |
+| Dialog UI (`DialogBox`, `GetOpenFileName`, `OPENFILENAME`) | `KEYMACRO.C` | Declared only - may never be implemented (CLAUDE.md already rules out literal native dialogs) |
+| Menu API + MRU's path helpers (`InsertMenu`, `GetFullPathName`) | `MRU.C` | Declared only - blocked on a menu-replacement design that doesn't exist yet |
+| Cursor creation (`CreateCursor`) | `CURSOR.C` | Declared only (GDI, milestone 3) |
+
+"Declared only" means: the function/type is present so the file
+type-checks, but calling it will fail to *link* until a later
+milestone gives it a real body. That's a deliberate boundary, not an
+oversight - each belongs to a specific later milestone (see the
+per-item notes below and the milestone list), and folding a rushed
+implementation into this types-and-primitives header would hide that
+decision rather than make it. Two are called out explicitly because
+the reasoning isn't obvious:
+- Thread/event sync: `ENGINE.C` calls `WaitForSingleObject` on both
+  event handles (`hEventDebug`, `hEventShutdn`) *and* a thread handle
+  (`hThread`) - a real Win32 `HANDLE` is a polymorphic kernel object,
+  so replicating this in POSIX needs a tagged handle representation
+  (thread vs. event), not just a pthread mutex+cond pair. That's
+  design work for milestone 4 (SDL2 event loop / threading).
+- DDE and dialog UI: unlike everything else in this table, these two
+  may simply never get real implementations in this port at all - DDE
+  has no macOS/Linux/SDL2 equivalent, and CLAUDE.md already commits to
+  not reproducing Emu28's dialog-based UI literally. They're declared
+  purely so `KEYMACRO.C`/`DDESERV.C` type-check as a unit; nothing
+  currently plans to link them.
+
+File I/O and Winsock got real implementations because - unlike the
+above - they're genuinely portable primitives once you look past the
+Win32 names, in the same sense `ZeroMemory`/`lstrcpy` are: `HANDLE`
+from `CreateFile` maps 1:1 onto a POSIX fd, and Winsock's API is
+deliberately BSD-socket-shaped. Winsock's `SOCKADDR_IN` needed real
+care, though, not just a rename - see milestone 2's notes below for
+the two correctness bugs (not compile errors) that trap.
+
 `EMU28.C` is the outlier worth noting: despite being the "main" file, it
 has no `WinMain`/window-creation code of its own in this source package
 — building the real Windows binary needs `EMU28.RC` (a Win32 resource
@@ -124,20 +218,97 @@ as literal dialogs).
 
 ## Not yet decided / next milestones
 
-1. Write `shim/`'s Win32-types-and-primitives header (the equivalent of
-   `emu28android`'s `win32-layer.h`, but new code, not ported - that file
-   is Android/NDK-specific in its actual implementations even though the
-   API surface it covers is the right reference).
-2. Get `vendor/emu28-upstream/`'s non-platform-specific files (the CPU/
-   RPL engine list above) compiling standalone against that header with
-   plain `gcc`/`clang`, everything else stubbed out - proves the core
-   engine builds portably before any rendering work starts.
+1. ~~Write `shim/`'s Win32-types-and-primitives header~~ - done:
+   `shim/win32_types.h` + the `compat/` redirect-header trick (see
+   Architecture above for how the latter satisfies PCH.H's
+   angle-bracket includes without touching vendor/).
+2. ~~Get `vendor/emu28-upstream/`'s non-platform-specific files (the
+   CPU/RPL engine list above) compiling standalone against that
+   header~~ - done, and extended to all 19 files from the "everything
+   else" list too (KEYBOARD.C, KEYMACRO.C, MRU.C, SYMBFILE.C, TIMER.C,
+   CURSOR.C, DDESERV.C, UDP.C, DISASM.C, DISMEM.C, DISPNUM.C, DISRPL.C,
+   LODEPNG.C, plus the original 6-file CPU/RPL engine set). All compile
+   clean with plain `clang`/`gcc` (`-x c`, since clang treats
+   upper-case `.C` as C++ by default - remember this flag for the
+   eventual build system), no duplicate external symbols across the 19
+   object files, remaining warnings are pre-existing benign
+   vendor-source noise (unused opcode-handler parameters, missing
+   braces in FETCH.C/DISPNUM.C's dispatch/lookup tables).
+
+   Getting the last 13 files compiling required a much bigger
+   `win32_types.h` than the first pass needed, and turned up genuine
+   *correctness* traps, not just missing declarations - worth
+   remembering if this ever gets redone from scratch:
+   - `PCH.H`'s own `CLL()` macro (`#if _MSC_VER <= 1200`) misfires
+     under any non-MSVC compiler, since an undefined `_MSC_VER`
+     evaluates as `0` and `0 <= 1200` is true - it silently picks
+     PCH.H's *oldest* fallback branch (an MSVC6-era `i64` integer
+     suffix gcc/clang reject outright) instead of skipping it.
+     `win32_types.h` now defines `_MSC_VER` to a modern value up
+     front, which makes all of PCH.H's own version guards behave as
+     they would under current MSVC.
+   - UDP.C's `SOCKADDR_IN` can't just be `struct sockaddr_in` from
+     `<netinet/in.h>`: Winsock's `struct in_addr` is a union whose
+     first member is a 4-byte sub-struct (so `{255,255,255,255}`
+     brace-initializes it, and `.s_addr` reads it back as one DWORD) -
+     POSIX's is a bare scalar field, which silently accepts the same
+     initializer as "excess elements" and only keeps the *first* `255`
+     as the whole address (0.0.0.255, not 255.255.255.255). Fixed by
+     giving `SOCKADDR_IN`/`IN_ADDR` their own Winsock-shaped
+     definitions and writing `sendto()` as a real conversion wrapper
+     into a native `struct sockaddr_in` (needed regardless, since
+     macOS's version of that struct - unlike Linux's - carries a
+     leading `sin_len` byte a raw pointer-cast would get wrong).
+   - Win32's own `INADDR_NONE` is typed `unsigned long`, which is
+     64-bit on LP64 macOS/Linux; compared against the (32-bit)
+     `in_addr_t` address field, every `== INADDR_NONE` check was
+     silently always-false. Defined here as `(in_addr_t)0xffffffff`
+     instead. Neither of these two socket bugs was a compiler error or
+     even a build-breaking warning - both would have shipped a
+     UDP.C that compiled clean and just never worked, which is the
+     real argument for the runtime smoke test (loopback send/receive
+     through the shim's actual `sendto()` path, not just
+     `-fsyntax-only`) that caught them.
 3. GDI-drawing shim: route `KML.C`/`DISPLAY.C`'s bitmap composition into
    an SDL2 texture instead of a Windows DC. This is the real rendering
    work and the least precedented piece (Android's version draws through
-   a Canvas, not applicable directly).
+   a Canvas, not applicable directly). **`DISPLAY.C` done** -
+   `shim/gdi.h`/`gdi.c` implement CreateCompatibleDC/CreateDIBSection-
+   style memory DCs, BitBlt/PatBlt (with a *general* ternary-ROP
+   evaluator, not a lookup table - see gdi.c's `rop3()`), solid
+   brushes, and a narrow BMP loader; `DISPLAY.C` compiles clean
+   against it. Verified two ways, not just compiled: (1) 216
+   P/S/D combinations checked against independently hand-derived
+   formulas for DISPLAY.C's own two custom ROPs (`ROP_PDSPxax`,
+   `ROP_PSDPxax` - both decoded from their RPN mnemonics, e.g.
+   `PDSPxax` → `P ^ (D & (S ^ P))`, cross-checked byte-for-byte
+   against the standard ROP3 truth-table encoding before trusting
+   either), and (2) an actual end-to-end run: `LoadBitmapFile` loading
+   the real `skins/hp28c/REAL28C.BMP`, `BitBlt`'d through the shim,
+   dumped to PNG via the already-portable `LODEPNG.C` and visually
+   confirmed pixel-perfect, plus a synthetic mask+background+ink
+   composite reproducing `UpdateMainDisplay`'s exact two-`BitBlt`
+   algorithm end to end (also visually confirmed, plus a numeric
+   per-pixel spot-check). That end-to-end pass caught a real, latent
+   bug the compile-only milestone-2 checks couldn't have: `win32_types.h`
+   had `LONG`/`ULONG` typedef'd to native `long`/`unsigned long`,
+   which is 64-bit on LP64 macOS/Linux; real Win32 `LONG` is *always*
+   32-bit (Windows' LLP64 model). `BITMAPINFOHEADER` silently came out
+   64 bytes instead of the required 40, corrupting every field offset
+   - `sizeof()` mismatches like this produce no compiler warning at
+   all. Fixed (now `int32_t`/`uint32_t`); worth remembering if another
+   binary-format struct gets added later. `KML.C` not attempted -
+   needs a larger superset of this same shim (`StretchBlt`,
+   `GetObject`, `CreateBitmap`) plus several entirely different
+   categories (shell folder browsing, `FindFirstFile`-style
+   enumeration, dialog procs, window messaging) that showed up when
+   actually attempting its compile - likely its own milestone-sized
+   piece of work, not a quick extension of this one.
 4. SDL2 event loop replacing `EMU28.C`'s window/message-pump section
-   (small surface, per the table above).
+   (small surface, per the table above) - this is also where the
+   thread/event-sync `HANDLE` design decision flagged above belongs
+   (`WaitForSingleObject` et al., currently declared-not-implemented in
+   `win32_types.h`).
 5. Stub `SETTINGS.C` (registry) to a flat config file, and initially stub
    `SOUND.C`/`SNDENUM.C` entirely (sound isn't needed for the HP-28C
    menu/UI research this project exists to support) rather than porting
@@ -150,7 +321,10 @@ as literal dialogs).
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the
 untouched-engine files, linked into an SDL2 executable) is the likely
-shape, but this hasn't been set up.
+shape, but this hasn't been set up. The ad hoc `clang -x c -I shim/compat
+-I shim -I vendor/emu28-upstream` invocation used to verify milestone 2
+is not that build system - it was just enough to prove the six files
+compile; CMake still needs setting up for real.
 
 ## ROM images
 
