@@ -1022,9 +1022,16 @@ CMake setup - a plain `sh` script that just runs the same
 compile-then-link recipe milestones 8-10's own ad hoc verification
 already used (including the `-DLODEPNG_NO_COMPILE_CRC` flag milestone
 8's notes explain), against every file `build.sh`'s own comments
-enumerate. `./build.sh && ./build/emu28` builds and runs the whole
-emulator; see the README's "Building and running" section for the
-`skins/hp28c/HP28C.ROM` setup step it needs first.
+enumerate. `run.sh` (also added the same session, once a user actually
+tried double-clicking `build.sh` expecting the emulator to open -
+`build.sh` only ever builds, by design, matching what its name and the
+README's separately-documented two-step `./build.sh && ./build/emu28`
+flow both say) just calls `build.sh` and then execs `./build/emu28` -
+the "double-click and it opens" entry point, kept as its own file
+rather than folded into `build.sh` so `build.sh` keeps meaning
+"build," not "build and also launch a window." See the README's
+"Building and running" section for the `skins/hp28c/HP28C.ROM` setup
+step either script needs first.
 
 ## ROM images
 

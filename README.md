@@ -40,7 +40,9 @@ how this was verified. No proper build system (CMake) exists yet —
    ```
    (`skins/hp28c/REAL28CL.KML`, the skin script this loads, expects a
    file by that exact name next to it.)
-3. `./build.sh && ./build/emu28`
+3. `./run.sh` (builds via `build.sh`, then launches `build/emu28`) —
+   or `./build.sh && ./build/emu28` to do the two steps separately
+   (e.g. to rebuild without relaunching).
 
 Click the calculator's own on-screen keys with the mouse to type at it
 — there's no PC-keyboard input yet.
