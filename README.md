@@ -22,11 +22,28 @@ Windows.
 
 ## Status
 
-Early scaffolding. The upstream Emu28 v1.39 source has been vendored
-unmodified (see "Architecture" below) and its Win32-API surface mapped;
-no shim or SDL2 front end has been written yet. See `CLAUDE.md` for the
-concrete architecture and the actual file-by-file Win32 dependency
-breakdown that scopes the remaining work.
+Working. The Win32-compatibility shim and SDL2 front end are written;
+the upstream engine, KML skin parser, and CPU-emulation thread all run
+for real against a real ROM, with mouse-click keyboard input. See
+`CLAUDE.md` for the concrete architecture, the file-by-file Win32
+dependency breakdown, and the full milestone-by-milestone history of
+how this was verified. No proper build system (CMake) exists yet —
+`build.sh` is an ad hoc but working stand-in.
+
+## Building and running
+
+1. Install SDL2 (e.g. `brew install sdl2` on macOS).
+2. Supply a real HP-28C ROM dump (see "ROM images" below) and point
+   `skins/hp28c/HP28C.ROM` at it — a symlink is fine:
+   ```
+   ln -s /path/to/your/rom.rom skins/hp28c/HP28C.ROM
+   ```
+   (`skins/hp28c/REAL28CL.KML`, the skin script this loads, expects a
+   file by that exact name next to it.)
+3. `./build.sh && ./build/emu28`
+
+Click the calculator's own on-screen keys with the mouse to type at it
+— there's no PC-keyboard input yet.
 
 ## Architecture
 
@@ -35,22 +52,24 @@ breakdown that scopes the remaining work.
   CPU/RPL/KML/debugger engine. Never hand-edited directly.
 - `skins/hp28c/` — the official HP-28C KML skin (faceplate bitmap + key
   layout), also from hp.giesselink.com.
-- `shim/` (not yet created) — new code: a Win32-type/API compatibility
-  layer plus an SDL2 platform layer, following the same technique proven
-  twice already for this exact emulator family by Regis Cosnier (`dgis`):
+- `shim/` — the Win32-type/API compatibility layer plus the SDL2
+  platform layer, following the same technique proven twice already for
+  this exact emulator family by Regis Cosnier (`dgis`):
   [`emu28android`](https://github.com/dgis/emu28android) (NDK) and
   [`emu48mac`](https://github.com/dgis/emu48mac) (Cocoa, for the sibling
   HP48 emulator). Neither is vendored here — different target platform
   and, for emu48mac, a different calculator core — but both are direct
-  architectural precedent.
+  architectural precedent. See `CLAUDE.md` for the full file-by-file
+  breakdown.
 
 ## ROM images
 
 Like all emulators, Emu28 needs a ROM image to run, and the author has no
 license to distribute one. **No ROM is included or will ever be
 committed here** — supply your own dump and point the emulator at it at
-runtime. See `hp.giesselink.com/Emu28/ROMDMP.TXT` for the author's notes
-on ROM uploading if you own real hardware.
+runtime (see "Building and running" above). See
+`hp.giesselink.com/Emu28/ROMDMP.TXT` for the author's notes on ROM
+uploading if you own real hardware.
 
 ## License
 

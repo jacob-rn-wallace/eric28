@@ -1005,13 +1005,20 @@ as literal dialogs).
     standalone real-behavior test harnesses afterward with zero
     regressions.
 
-No build system exists yet. Given the file-portability split above, a
-CMake setup mirroring `vger`'s own (`core`-style static library for the
-untouched-engine files, linked into an SDL2 executable) is the likely
-shape, but this hasn't been set up. The ad hoc `clang -x c -I shim/compat
--I shim -I vendor/emu28-upstream` invocation used to verify milestone 2
-is not that build system - it was just enough to prove the six files
-compile; CMake still needs setting up for real.
+No *proper* build system exists yet. Given the file-portability split
+above, a CMake setup mirroring `vger`'s own (`core`-style static
+library for the untouched-engine files, linked into an SDL2 executable)
+is the likely shape, but this hasn't been set up. `build.sh` (added
+once milestones 8-10 made a real full build worth running repeatably
+instead of retyping by hand) is a working stand-in, not that eventual
+CMake setup - a plain `sh` script that just runs the same
+`clang -x c -I shim/compat -I shim -I vendor/emu28-upstream ...`
+compile-then-link recipe milestones 8-10's own ad hoc verification
+already used (including the `-DLODEPNG_NO_COMPILE_CRC` flag milestone
+8's notes explain), against every file `build.sh`'s own comments
+enumerate. `./build.sh && ./build/emu28` builds and runs the whole
+emulator; see the README's "Building and running" section for the
+`skins/hp28c/HP28C.ROM` setup step it needs first.
 
 ## ROM images
 
