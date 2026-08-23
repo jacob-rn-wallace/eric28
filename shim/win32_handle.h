@@ -66,6 +66,29 @@ extern BOOL   WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWr
                          LPDWORD lpNumberOfBytesWritten, LPVOID lpOverlapped);
 extern DWORD  SetFilePointer(HANDLE hFile, LONG lDistanceToMove, LONG *lpDistanceToMoveHigh, DWORD dwMoveMethod);
 extern DWORD  GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh);
+extern BOOL   SetEndOfFile(HANDLE hFile);
+
+/* ---- file mapping (FILES.C's LoadBitmapFile/MapRom-adjacent code) ----------------
+ * A fourth HANDLE kind (see this file's header comment for the tagged-
+ * dispatch design): FILES.C always maps a whole read-only file into
+ * memory once and reads straight out of the mapping, never writes
+ * through it, so this is a thin, real wrapper over POSIX mmap - not
+ * a general-purpose reimplementation of Windows' shared-memory-section
+ * semantics (no PAGE_READWRITE/copy-on-write path exists here because
+ * nothing in this codebase's call sites needs one). MapViewOfFile
+ * returns a bare LPVOID (matching real Win32), not a HANDLE, so
+ * UnmapViewOfFile can't read a type tag back out of it the way
+ * CloseHandle does - see win32_handle.c for how it recovers the
+ * mapping's length instead. */
+
+#define PAGE_READONLY  0x02
+#define FILE_MAP_READ  0x0004
+
+extern HANDLE CreateFileMapping(HANDLE hFile, LPVOID lpAttributes, DWORD flProtect,
+                                 DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCTSTR lpName);
+extern LPVOID MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess,
+                             DWORD dwFileOffsetHigh, DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap);
+extern BOOL   UnmapViewOfFile(LPCVOID lpBaseAddress);
 
 /* ---- events --------------------------------------------------------------------- */
 

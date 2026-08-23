@@ -128,6 +128,33 @@ BOOL SetWindowOrgEx(HDC hdc, INT x, INT y, LPVOID lpPoint)
 	return TRUE;
 }
 
+BOOL GetWindowPlacement(HWND hwnd, WINDOWPLACEMENT *lpwndpl)
+{
+	int x = 0, y = 0, w = 0, h = 0;
+
+	(void)hwnd;
+	if (g_window) {
+		SDL_GetWindowPosition(g_window, &x, &y);
+		SDL_GetWindowSize(g_window, &w, &h);
+	}
+	lpwndpl->flags = 0;
+	lpwndpl->showCmd = 0;
+	lpwndpl->ptMinPosition.x = 0;
+	lpwndpl->ptMinPosition.y = 0;
+	lpwndpl->ptMaxPosition.x = 0;
+	lpwndpl->ptMaxPosition.y = 0;
+	SetRect(&lpwndpl->rcNormalPosition, x, y, x + w, y + h);
+	return TRUE;
+}
+
+BOOL SetWindowPlacement(HWND hwnd, CONST WINDOWPLACEMENT *lpwndpl)
+{
+	(void)hwnd;
+	if (g_window)
+		SDL_SetWindowPosition(g_window, lpwndpl->rcNormalPosition.left, lpwndpl->rcNormalPosition.top);
+	return TRUE;
+}
+
 HMENU GetMenu(HWND hwnd)
 {
 	(void)hwnd;

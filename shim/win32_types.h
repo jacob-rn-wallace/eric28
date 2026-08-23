@@ -109,6 +109,8 @@ typedef LONG_PTR LPARAM;
  * meaningful outside x86 Windows, so they disappear here. */
 #define CALLBACK
 #define WINAPI
+#define FAR
+#define NEAR
 
 /* ---- pointer typedefs -------------------------------------------------- */
 
@@ -150,6 +152,11 @@ typedef struct {
 	LONG right;
 	LONG bottom;
 } RECT, *LPRECT;
+
+typedef struct {
+	LONG x;
+	LONG y;
+} POINT, *LPPOINT;
 
 typedef struct {
 	WORD wYear;
@@ -286,6 +293,69 @@ static inline int wsprintf(char *buf, const char *fmt, ...)
 	n = vsprintf(buf, fmt, args);
 	va_end(args);
 	return n;
+}
+
+typedef LPSTR PSZ;
+
+/* MSVC's __unaligned pointer qualifier (marks a pointer as pointing to
+ * possibly-misaligned data, so the compiler avoids aligned load/store
+ * instructions for it) - x86/x86_64 gcc/clang has no equivalent concept
+ * (unaligned access is fine there without a qualifier), so this just
+ * needs to vanish rather than be reimplemented. FILES.C's own uses are
+ * all on BITMAPFILEHEADER-adjacent data that's naturally byte-aligned
+ * anyway once read through this shim's own struct layouts. */
+#define __unaligned
+
+/* ---- CRT path-splitting (FILES.C's GetCutPathName) -------------------------------
+ * _splitpath/_makepath are genuinely portable once you set aside the
+ * drive-letter concept POSIX doesn't have (drive is always written
+ * empty here, matching what a POSIX absolute/relative path implies).
+ * Real implementations, not declared-only - same bucket as milestone
+ * 2's file-I/O work. */
+
+#define _MAX_PATH  260
+#define _MAX_DRIVE 3
+#define _MAX_DIR   256
+#define _MAX_FNAME 256
+#define _MAX_EXT   256
+
+static inline VOID _tsplitpath(LPCTSTR path, LPTSTR drive, LPTSTR dir, LPTSTR fname, LPTSTR ext)
+{
+	CONST CHAR *lastSlash = strrchr(path, '/');
+	CONST CHAR *base = lastSlash ? lastSlash + 1 : path;
+	CONST CHAR *lastDot = strrchr(base, '.');
+
+	if (drive)
+		drive[0] = '\0'; /* no drive letters on POSIX */
+	if (dir) {
+		size_t n = lastSlash ? (size_t)(lastSlash - path + 1) : 0;
+		memcpy(dir, path, n);
+		dir[n] = '\0';
+	}
+	if (fname) {
+		size_t n = lastDot ? (size_t)(lastDot - base) : strlen(base);
+		memcpy(fname, base, n);
+		fname[n] = '\0';
+	}
+	if (ext) {
+		if (lastDot)
+			strcpy(ext, lastDot);
+		else
+			ext[0] = '\0';
+	}
+}
+
+static inline VOID _tmakepath(LPTSTR path, LPCTSTR drive, LPCTSTR dir, LPCTSTR fname, LPCTSTR ext)
+{
+	path[0] = '\0';
+	if (drive && drive[0])
+		strcat(path, drive);
+	if (dir && dir[0])
+		strcat(path, dir);
+	if (fname)
+		strcat(path, fname);
+	if (ext && ext[0])
+		strcat(path, ext);
 }
 
 /* ---- bit-manipulation macros ----------------------------------------------- */
@@ -765,6 +835,11 @@ typedef INT_PTR (CALLBACK *DLGPROC)(HWND, UINT, WPARAM, LPARAM);
 
 #define IDOK     1
 #define IDCANCEL 2
+#define IDABORT  3
+#define IDRETRY  4
+#define IDIGNORE 5
+#define IDYES    6
+#define IDNO     7
 
 #define BST_CHECKED 1
 
@@ -877,6 +952,74 @@ extern LRESULT SendMessage(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 #define GCL_HCURSOR   -12
 #define WM_SYSCOMMAND 0x0112
 #define MK_LBUTTON    0x0001
+
+/* GetWindowPlacement/SetWindowPlacement (FILES.C's SetWindowLocation/
+ * SaveDocument/SaveBackup - saving and restoring the window's on-screen
+ * position across sessions). Unlike the rest of this section, this one
+ * gets a REAL implementation (in shim/sdl_main.c, alongside
+ * GetClientRect) rather than staying declared-only: milestone 4
+ * already has a live SDL2 window by the time FILES.C needs this, and
+ * FILES.C only ever touches .length and .rcNormalPosition, both of
+ * which map directly onto SDL_GetWindowPosition/SDL_SetWindowPosition. */
+typedef struct {
+	UINT length;
+	UINT flags;
+	UINT showCmd;
+	POINT ptMinPosition;
+	POINT ptMaxPosition;
+	RECT  rcNormalPosition;
+} WINDOWPLACEMENT, *LPWINDOWPLACEMENT;
+
+extern BOOL GetWindowPlacement(HWND hWnd, WINDOWPLACEMENT *lpwndpl);
+extern BOOL SetWindowPlacement(HWND hWnd, CONST WINDOWPLACEMENT *lpwndpl);
+
+/* ---- window icon (FILES.C's LoadIconFromFile/LoadIconDefault) ---------------------
+ * Setting the taskbar/title-bar icon from an .ico file is purely
+ * cosmetic for this project (the real UI is the composited skin
+ * bitmap, not a native window chrome icon) and .ico is a Windows-only
+ * format this shim has no reader for - declared only, same bucket as
+ * the dialog/menu/DDE groups above. SendMessage (already declared
+ * above for WM_SYSCOMMAND) carries the WM_SETICON calls; nothing
+ * currently plans to give it a real body since nothing needs the
+ * resulting icon to actually appear anywhere. */
+
+#define IMAGE_ICON       1
+#define LR_LOADFROMFILE  0x00000010
+#define LR_DEFAULTSIZE   0x00000040
+#define LR_SHARED        0x00008000
+#define WM_SETICON       0x0080
+#define ICON_SMALL       0
+#define ICON_BIG         1
+
+extern HANDLE LoadImage(HINSTANCE hInst, LPCTSTR name, UINT type, INT cx, INT cy, UINT fuLoad);
+
+/* ---- window regions (FILES.C's CreateRgnFromBitmap) -------------------------------
+ * Building an irregular (non-rectangular) window shape from a bitmap's
+ * transparent color, for SetWindowRgn (already declared-only above) to
+ * apply. Like SetWindowRgn itself, this has no SDL2 equivalent (SDL2
+ * windows are always rectangular) and depends on the same not-yet-
+ * designed shaped-window feature, so it stays declared only - this
+ * project's window is always the full skin rectangle, with
+ * transparency handled by the GDI compositing pipeline itself (see
+ * gdi.c's ROP-based BitBlt), not by punching a hole in the OS window. */
+
+typedef struct {
+	DWORD dwSize;
+	DWORD iType;
+	DWORD nCount;
+	DWORD nRgnSize;
+	RECT  rcBound;
+} RGNDATAHEADER;
+
+typedef struct {
+	RGNDATAHEADER rdh;
+	CHAR          Buffer[1];
+} RGNDATA, *LPRGNDATA, *PRGNDATA;
+
+#define RDH_RECTANGLES 1
+#define MAXLONG        0x7fffffffL
+
+extern HRGN ExtCreateRegion(LPVOID lpXform, DWORD nCount, CONST RGNDATA *lpRgnData);
 
 static inline BOOL IsRectEmpty(CONST RECT *lprc)
 {

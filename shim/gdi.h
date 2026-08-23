@@ -74,12 +74,12 @@ typedef struct {
 	LONG  biYPelsPerMeter;
 	DWORD biClrUsed;
 	DWORD biClrImportant;
-} BITMAPINFOHEADER;
+} BITMAPINFOHEADER, *PBITMAPINFOHEADER;
 
 typedef struct {
 	BITMAPINFOHEADER bmiHeader;
 	RGBQUAD           bmiColors[1];
-} BITMAPINFO;
+} BITMAPINFO, *LPBITMAPINFO;
 
 #pragma pack(push, 2)
 typedef struct {
@@ -88,11 +88,13 @@ typedef struct {
 	WORD  bfReserved1;
 	WORD  bfReserved2;
 	DWORD bfOffBits;
-} BITMAPFILEHEADER;
+} BITMAPFILEHEADER, *LPBITMAPFILEHEADER;
 #pragma pack(pop)
 
 #define BI_RGB         0
+#define BI_BITFIELDS   3
 #define DIB_RGB_COLORS 0
+#define CBM_INIT       0x04
 
 typedef struct {
 	LONG   bmType;
@@ -145,8 +147,42 @@ extern BOOL    DeleteObject(HGDIOBJ h);
 extern BOOL    DeleteDC(HDC hdc);
 extern HBRUSH  CreateSolidBrush(COLORREF color);
 extern VOID    GdiFlush(VOID);
-extern BOOL    SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd);
+extern HPALETTE SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd);
 extern UINT    RealizePalette(HDC hdc);
+
+/* ---- palettes and DIB<->device-bitmap conversion (FILES.C's BMP/GIF/PNG loaders) --
+ * CreatePalette hands back a real, non-NULL, distinct HPALETTE (so
+ * FILES.C's own "if (bPalette && hPalette == NULL)" guard behaves
+ * correctly and hOldPalette round-trips through SelectPalette/
+ * DeleteObject), but doesn't need to store the color table anywhere -
+ * this shim renders true-color throughout, so SelectPalette/
+ * RealizePalette above are already no-ops that never read it back
+ * (see sdl_main.c's hPalette comment). CreateDIBitmap/GetDIBits *do*
+ * need to be real: they're the actual pixel-format conversion between
+ * an on-disk DIB's byte layout (1/8/24/32-bit, B-G-R(-pad) memory
+ * order) and this shim's own internal GdiBitmap storage (8-bit
+ * paletted or 32-bit packed-COLORREF - see gdi.c's GdiBitmap comment),
+ * the same conversion CreateDIBSection/LoadBitmapFile already do by
+ * hand elsewhere in this file. */
+
+typedef struct {
+	BYTE peRed;
+	BYTE peGreen;
+	BYTE peBlue;
+	BYTE peFlags;
+} PALETTEENTRY;
+
+typedef struct {
+	WORD         palVersion;
+	WORD         palNumEntries;
+	PALETTEENTRY palPalEntry[1];
+} LOGPALETTE, *PLOGPALETTE;
+
+extern HPALETTE CreatePalette(CONST LOGPALETTE *lplgpl);
+extern HBITMAP  CreateDIBitmap(HDC hdc, CONST BITMAPINFOHEADER *lpbmih, DWORD fdwInit,
+                                CONST VOID *lpbInit, CONST BITMAPINFO *lpbmi, UINT fuUsage);
+extern INT      GetDIBits(HDC hdc, HBITMAP hbmp, UINT uStartScan, UINT cScanLines,
+                           LPVOID lpvBits, LPBITMAPINFO lpbi, UINT uUsage);
 
 extern BOOL BitBlt(HDC hdcDest, INT xDest, INT yDest, INT w, INT h,
                     HDC hdcSrc, INT xSrc, INT ySrc, DWORD rop);

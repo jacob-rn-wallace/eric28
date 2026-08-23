@@ -14,11 +14,13 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 
 typedef enum {
 	WIN32_HANDLE_FILE,
 	WIN32_HANDLE_EVENT,
-	WIN32_HANDLE_THREAD
+	WIN32_HANDLE_THREAD,
+	WIN32_HANDLE_FILEMAP
 } Win32HandleKind;
 
 typedef struct {
@@ -41,6 +43,10 @@ typedef struct {
 			DWORD result;
 			BOOL finished;
 		} thread;
+		struct {
+			int fd; /* dup()'d from the source file - a mapping outlives CloseHandle(hFile), matching real Win32 */
+			size_t size;
+		} filemap;
 	} u;
 } Win32Handle;
 
@@ -131,6 +137,101 @@ DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh)
 	if (lpFileSizeHigh)
 		*lpFileSizeHigh = (DWORD)((uint64_t)st.st_size >> 32);
 	return (DWORD)st.st_size;
+}
+
+BOOL SetEndOfFile(HANDLE hFile)
+{
+	Win32Handle *h = (Win32Handle *)hFile;
+	off_t pos = lseek(h->u.file.fd, 0, SEEK_CUR); /* truncate at the current file pointer, matching real Win32 */
+
+	return pos != (off_t)-1 && ftruncate(h->u.file.fd, pos) == 0;
+}
+
+/* ---- file mapping ------------------------------------------------------------------
+ * MapViewOfFile hands back a bare pointer (matching real Win32), not a
+ * tagged HANDLE, so UnmapViewOfFile can't recover the mapping's length
+ * from the pointer itself the way CloseHandle reads a type tag - a
+ * small side list of active mappings does that instead. Linear search
+ * is fine here: FILES.C never has more than one or two mappings open
+ * at once. */
+
+typedef struct MappedRegion {
+	LPVOID addr;
+	size_t len;
+	struct MappedRegion *next;
+} MappedRegion;
+
+static MappedRegion *g_mappedRegions = NULL;
+
+HANDLE CreateFileMapping(HANDLE hFile, LPVOID lpAttributes, DWORD flProtect,
+                          DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCTSTR lpName)
+{
+	Win32Handle *src = (Win32Handle *)hFile;
+	Win32Handle *h;
+	int dupFd;
+	struct stat st;
+
+	(void)lpAttributes;
+	(void)flProtect;     /* only the PAGE_READONLY/read-only path is used anywhere in this codebase */
+	(void)dwMaximumSizeHigh;
+	(void)lpName;         /* named/shared mappings aren't used anywhere in this codebase */
+
+	if (fstat(src->u.file.fd, &st) != 0)
+		return NULL;
+
+	dupFd = dup(src->u.file.fd);
+	if (dupFd < 0)
+		return NULL;
+
+	h = (Win32Handle *)calloc(1, sizeof(Win32Handle));
+	h->type = WIN32_HANDLE_FILEMAP;
+	h->u.filemap.fd = dupFd;
+	h->u.filemap.size = dwMaximumSizeLow ? dwMaximumSizeLow : (size_t)st.st_size; /* 0 = map the whole file */
+	return (HANDLE)h;
+}
+
+LPVOID MapViewOfFile(HANDLE hFileMappingObject, DWORD dwDesiredAccess,
+                      DWORD dwFileOffsetHigh, DWORD dwFileOffsetLow, SIZE_T dwNumberOfBytesToMap)
+{
+	Win32Handle *h = (Win32Handle *)hFileMappingObject;
+	size_t len = dwNumberOfBytesToMap ? dwNumberOfBytesToMap : h->u.filemap.size;
+	off_t offset = ((off_t)dwFileOffsetHigh << 32) | dwFileOffsetLow;
+	void *addr;
+	MappedRegion *region;
+
+	(void)dwDesiredAccess; /* only FILE_MAP_READ is used anywhere in this codebase */
+
+	if (len == 0)
+		return NULL; /* mmap()ing a zero-length region is undefined - real Win32 also fails this */
+
+	addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, h->u.filemap.fd, offset);
+	if (addr == MAP_FAILED)
+		return NULL;
+
+	region = (MappedRegion *)malloc(sizeof(MappedRegion));
+	region->addr = addr;
+	region->len = len;
+	region->next = g_mappedRegions;
+	g_mappedRegions = region;
+	return addr;
+}
+
+BOOL UnmapViewOfFile(LPCVOID lpBaseAddress)
+{
+	MappedRegion **link = &g_mappedRegions;
+
+	while (*link) {
+		if ((*link)->addr == lpBaseAddress) {
+			MappedRegion *dead = *link;
+
+			munmap(dead->addr, dead->len);
+			*link = dead->next;
+			free(dead);
+			return TRUE;
+		}
+		link = &(*link)->next;
+	}
+	return FALSE; /* not a live mapping - matches real Win32's failure return */
 }
 
 /* ---- events --------------------------------------------------------------------- */
@@ -284,6 +385,9 @@ BOOL CloseHandle(HANDLE hObject)
 	switch (h->type) {
 	case WIN32_HANDLE_FILE:
 		close(h->u.file.fd);
+		break;
+	case WIN32_HANDLE_FILEMAP:
+		close(h->u.filemap.fd); /* any views mapped from it stay valid until their own UnmapViewOfFile, matching real Win32 */
 		break;
 	case WIN32_HANDLE_THREAD:
 		pthread_join(h->u.thread.thread, NULL); /* real Win32 doesn't require this, but leaking the OS thread would be worse */

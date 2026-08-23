@@ -107,6 +107,46 @@ shim/                    New code only: Win32-type/API compatibility
                          combo boxes, window messaging, keyboard-layout
                          queries) are declared-only in win32_types.h
                          instead - see its own section comments.
+                         Milestone 7 extended this with the real
+                         DIB<->device-bitmap conversion FILES.C's own
+                         BMP/GIF/PNG skin loaders need: CreateDIBitmap
+                         (builds a GdiBitmap from an in-memory DIB's
+                         raw bytes - 8-bit paletted or 24/32-bit
+                         truecolor, same B-G-R(-pad) memory-order
+                         handling LoadBitmapFile already did by hand),
+                         GetDIBits (the reverse - reports a GdiBitmap's
+                         format/palette in query mode, or copies its
+                         pixels out bottom-up in fetch mode), and
+                         CreatePalette (a real, distinct, non-NULL
+                         HPALETTE - but doesn't need to store the color
+                         table itself, since SelectPalette/
+                         RealizePalette are already no-ops in a
+                         truecolor-only renderer - see gdi.c's own
+                         comment). Fixed a real bug this surfaced:
+                         SelectPalette was typed to return BOOL, not
+                         HPALETTE like real Win32 - harmless as a
+                         no-op stub, but became a genuine "int to
+                         pointer" compile error once FILES.C's
+                         hOldPalette = SelectPalette(...) pattern
+                         actually got compiled against it, so it now
+                         tracks a real per-DC "currently selected
+                         palette" field and returns the previous one,
+                         same shape as SelectObject.
+
+                         KNOWN FOLLOW-UP: FILES.C's own LoadBitmapFile
+                         (BMP+GIF+PNG, with real palette support) is
+                         now the authoritative implementation of that
+                         name, but gdi.c still carries its own older,
+                         narrower BMP-only placeholder too (predating
+                         milestone 7, kept only because sdl_main.c's
+                         already-verified milestone-4 link still calls
+                         it via DISPLAY.C's CreateMainBitmap) - the two
+                         can't be linked into the same binary
+                         (duplicate symbol) until sdl_main.c is updated
+                         to link FILES.C directly instead, which is
+                         blocked on wiring up FILES.C's own further
+                         dependencies (see milestone 7's notes below)
+                         and isn't done yet.
   sdl_main.c             SDL2 platform layer (milestone 4, first
                          slice): opens a real on-screen window and
                          renders the composited skin+LCD through
@@ -132,6 +172,18 @@ shim/                    New code only: Win32-type/API compatibility
                          SetFilePointer/GetFileSize) moved here from
                          win32_types.h once CloseHandle needed to
                          dispatch across all three kinds together.
+                         Milestone 7 added a fourth HANDLE kind
+                         (file mapping) plus SetEndOfFile: real mmap-
+                         backed CreateFileMapping/MapViewOfFile/
+                         UnmapViewOfFile for FILES.C's whole-file BMP/
+                         GIF/PNG loading. MapViewOfFile hands back a
+                         bare LPVOID (matching real Win32), not a
+                         tagged HANDLE, so UnmapViewOfFile can't read a
+                         type tag back out of the pointer the way
+                         CloseHandle does - a small side list of
+                         {pointer, length} pairs recovers the mapping's
+                         length instead (fine for this codebase: never
+                         more than one or two mappings open at once).
   ini_file.h,            Real GetPrivateProfileString/
   ini_file.c             GetPrivateProfileInt/WritePrivateProfileString
                          (milestone 5) - SETTINGS.C's own default
@@ -145,6 +197,15 @@ shim/                    New code only: Win32-type/API compatibility
                          beeper opcode calls SoundOut unconditionally),
                          since SOUND.C/SNDENUM.C (DirectSound/waveOut)
                          are still out of scope entirely.
+  stegano_stub.c          Milestone 7: a single honest-failure stub for
+                         SteganoDecodeHBm (always reports "no
+                         steganography marker found") - FILES.C's real
+                         MapRom() never touches it (only the niche
+                         MapRomBmp() "ROM hidden inside a PNG" path
+                         does, and nothing calls that path either), but
+                         the symbol still needs *a* body to link, same
+                         reasoning as sound_stub.c. STEGANO.C itself
+                         stays untouched, per milestone 6.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -208,16 +269,23 @@ because they're not GDI/window/registry/sound:
 | Category | Representative files | Real implementation or declared-only? |
 |---|---|---|
 | Power status (`GetSystemPowerStatus`, low-battery auto-shutdown) | `MOPS.C` | Declared only |
-| Thread/event sync (`WaitForSingleObject`, `SetEvent`, `CreateEvent`, `CreateThread`, `INFINITE`) | `ENGINE.C`, `KEYMACRO.C` | Declared only |
+| Thread/event sync (`WaitForSingleObject`, `SetEvent`, `CreateEvent`, `CreateThread`, `INFINITE`) | `ENGINE.C`, `KEYMACRO.C` | Real (milestone 4 - pthread-backed tagged `HANDLE`, see `win32_handle.h`/`.c`) |
 | Clipboard (`OpenClipboard`, `GlobalAlloc`/`Lock`/`Unlock`/`Free`, `CF_TEXT`) | `STACK.C` | Declared only |
 | Locale (`GetLocaleInfo` for the decimal-point character) | `STACK.C` | Real (via `localeconv()`) |
 | winmm timer (`timeGetTime` vs. the periodic-callback family) | `ENGINE.C`, `TIMER.C` | `timeGetTime` real (aliases `GetTickCount`); `timeSetEvent`/`timeBeginPeriod`/etc. declared only |
-| File I/O (`CreateFile`/`ReadFile`/`WriteFile`/`CloseHandle`/`SetFilePointer`) | `KEYMACRO.C`, `SYMBFILE.C` | Real (POSIX fd wrapped in `HANDLE`) |
+| File I/O (`CreateFile`/`ReadFile`/`WriteFile`/`CloseHandle`/`SetFilePointer`) | `KEYMACRO.C`, `SYMBFILE.C`, `FILES.C` | Real (POSIX fd wrapped in `HANDLE`) |
+| File mapping (`CreateFileMapping`/`MapViewOfFile`/`UnmapViewOfFile`, `SetEndOfFile`) | `FILES.C` | Real (milestone 7 - real `mmap`, a fourth `HANDLE` kind) |
+| CRT path splitting (`_tsplitpath`/`_tmakepath`) | `FILES.C` | Real (milestone 7) |
+| Window position persistence (`WINDOWPLACEMENT`, `GetWindowPlacement`/`SetWindowPlacement`) | `FILES.C` | Real (milestone 7 - via SDL2, unlike the rest of "window management" below) |
+| GDI DIB<->device-bitmap conversion (`CreateDIBitmap`, `GetDIBits`, `CreatePalette`) | `FILES.C` | Real (milestone 7, GDI shim) |
 | Winsock (`socket`/`sendto`/`gethostbyname`, `SOCKADDR_IN`) | `UDP.C` | Real (see below) |
 | DDE (`DdeCreateDataHandle`, `XTYP_*`) | `DDESERV.C` | Declared only - may never be implemented (no macOS/Linux/SDL2 equivalent) |
 | Dialog UI (`DialogBox`, `GetOpenFileName`, `OPENFILENAME`) | `KEYMACRO.C` | Declared only - may never be implemented (CLAUDE.md already rules out literal native dialogs) |
 | Menu API + MRU's path helpers (`InsertMenu`, `GetFullPathName`) | `MRU.C` | Declared only - blocked on a menu-replacement design that doesn't exist yet |
 | Cursor creation (`CreateCursor`) | `CURSOR.C` | Declared only (GDI, milestone 3) |
+| Window icon loading (`LoadImage`, `WM_SETICON`) | `FILES.C` | Declared only (milestone 7 - purely cosmetic, `.ico` unsupported) |
+| Window regions (`ExtCreateRegion`, `RGNDATA`) | `FILES.C` | Declared only (milestone 7 - same bucket as `SetWindowRgn` below) |
+| Steganographic ROM-in-bitmap decoding (`SteganoDecodeHBm`) | `FILES.C` | Stubbed (milestone 7 - single honest-failure body, `STEGANO.C` itself untouched per milestone 6) |
 
 "Declared only" means: the function/type is present so the file
 type-checks, but calling it will fail to *link* until a later
@@ -520,6 +588,98 @@ as literal dialogs).
    file is part of Emu42" - a leftover from the sibling emulator this
    code was seemingly shared with upstream, not an error to fix here;
    `vendor/` stays byte-identical to what Giesselink published.)
+
+7. `FILES.C` (ROM loading, document save/load, BMP/GIF/PNG skin-image
+   decoding, window-position persistence) - done. This is the file
+   milestone 4's own notes already flagged as blocking real progress:
+   `KML.C`'s real `InitKML()` needs it for any skin with a `Rom` line,
+   and starting `ENGINE.C`'s `WorkerThread` needs a ROM loaded at all.
+   Turned out to need real new Win32 surface across every category this
+   project already has a place for, not a new one - genuinely portable
+   pieces got real implementations, Windows-specific ones with no
+   SDL2 equivalent stayed declared-only, same judgment call as every
+   earlier milestone:
+
+   - CRT path splitting (`_tsplitpath`/`_tmakepath`, `_MAX_PATH` and
+     friends) - real, in `win32_types.h`: genuinely portable once you
+     set aside the drive-letter concept POSIX doesn't have (`drive` is
+     always written empty).
+   - `WINDOWPLACEMENT`/`GetWindowPlacement`/`SetWindowPlacement`
+     (saving/restoring the window's on-screen position across
+     sessions) - real, in `sdl_main.c` via
+     `SDL_GetWindowPosition`/`SDL_SetWindowPosition`, alongside
+     `GetClientRect`. Unlike the rest of `win32_types.h`'s "window
+     management" section (still declared-only - real resizing/menus
+     still don't exist), this one only ever touches `.length` and
+     `.rcNormalPosition`, and milestone 4 already has a live window by
+     the time `FILES.C` needs it.
+   - File mapping (`CreateFileMapping`/`MapViewOfFile`/
+     `UnmapViewOfFile`, `SetEndOfFile`) - real, in `win32_handle.h`/
+     `.c` as a fourth `HANDLE` kind, backed by real `mmap`. See that
+     file's Architecture entry above for the "how does UnmapViewOfFile
+     recover a bare pointer's length" design note.
+   - GDI DIB<->device-bitmap conversion (`CreateDIBitmap`, `GetDIBits`,
+     `CreatePalette`, plus a real bug-fix to `SelectPalette`'s return
+     type) - real, in `gdi.h`/`gdi.c`. See that file's Architecture
+     entry above, including the known `LoadBitmapFile` duplicate-symbol
+     follow-up this surfaced.
+   - Window icon loading (`LoadImage`/`WM_SETICON`/...) - declared
+     only: purely cosmetic (the real UI is the composited skin bitmap,
+     not window chrome), and `.ico` is a format this shim has no
+     reader for.
+   - Window regions (`ExtCreateRegion`, `RGNDATA` and friends, used by
+     `CreateRgnFromBitmap` to build a shaped/non-rectangular window
+     from the skin's transparent color) - declared only, same bucket as
+     the already-declared-only `SetWindowRgn`: no SDL2 equivalent
+     (SDL2 windows are always rectangular), and this project's window
+     is always the full skin rectangle regardless, with transparency
+     already handled by the GDI compositing pipeline itself.
+   - `SteganoDecodeHBm` - a single honest-failure stub
+     (`shim/stegano_stub.c`), not a real port of `STEGANO.C` - see that
+     file's Architecture entry above.
+
+   Verified past just compiling, same bar as every earlier milestone:
+   all 23 non-window/registry/sound/debugger vendor files (the 22 from
+   milestones 2-5 plus `FILES.C` now) compile clean, and three
+   dedicated real-behavior test harnesses (scratchpad, not committed,
+   same as every earlier milestone's) exercised the new code for real:
+   (1) a `_tsplitpath`/`_tmakepath` round-trip test across several path
+   shapes, plus a real-`mmap` `CreateFileMapping`/`MapViewOfFile`/
+   `UnmapViewOfFile` test (whole-file and partial-length mappings
+   against a real file, cross-checked against an independent plain
+   `ReadFile`, plus `SetEndOfFile` truncation verified by re-opening
+   the file afterward) - both passed outright; (2) a `CreateDIBitmap`/
+   `GetDIBits` round-trip test (8-bit paletted and 24-bit truecolor
+   synthetic DIBs, checking pixel values, palette entries, and
+   `SelectPalette`'s previous-handle return survive the round trip
+   exactly) - caught a real test-harness bug (a bare `BITMAPINFO`'s
+   single-entry `bmiColors[1]` is too small for `GetDIBits` to write a
+   3-entry palette into - a stack buffer overflow that crashed the test
+   until the harness allocated a properly-sized buffer, same pattern
+   real Win32 callers always use); (3) a genuine link-and-run test of
+   `FILES.C`'s own compiled `MapRom()`/`UnpackRom()` against the real
+   `28C_1CC.ROM` the user provided (see `README.md`/`.gitignore` for
+   why it's never committed) - required ~25 link-satisfying stubs for
+   symbols `FILES.C.o` references from other not-yet-built vendor files
+   (`KML.C`'s real `InitKML`, `ENGINE.C`'s `CpuReset`, `RPL.C`,
+   `FETCH.C`, `DEBUGGER.C`'s breakpoint-list functions - `DEBUGGER.C`
+   itself doesn't even compile against the shim yet, being dialog-UI
+   heavy) that `MapRom()` itself never calls but the linker still needs
+   resolved, scoped to the test file only, not shim code. This test
+   caught a real bug in the TEST's own first-draft expectations, not in
+   `MapRom`/`UnpackRom`: `UnpackRom`'s unpack loop walks backward across
+   the *entire* buffer including the header region `MapRom` had already
+   saved verbatim, so a packed ROM's first 4 bytes end up holding
+   *unpacked* nibbles by the time `MapRom` returns, not a raw copy of
+   the file's first 4 bytes - the test's original blanket "first 4
+   bytes match" assertion was simply wrong for the packed case (true
+   only for an already-unpacked ROM), caught by actually running it
+   against the real ROM rather than assuming the algorithm's shape.
+   Once corrected, confirmed against the real `28C_1CC.ROM`: it's
+   nibble-packed (`dwRomSize` doubles from the 131072-byte file to
+   262144), and both the very first packed byte and a byte further into
+   the ROM unpack to the exact nibble values hand-computed from the
+   file's own raw bytes.
 
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the

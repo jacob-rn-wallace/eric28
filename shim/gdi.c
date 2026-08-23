@@ -20,7 +20,8 @@
 typedef enum {
 	GDI_OBJ_BITMAP,
 	GDI_OBJ_BRUSH,
-	GDI_OBJ_PEN
+	GDI_OBJ_PEN,
+	GDI_OBJ_PALETTE
 } GdiObjType;
 
 typedef struct {
@@ -71,6 +72,7 @@ typedef struct {
 	GdiBitmap *bitmap; /* currently selected bitmap, or NULL */
 	GdiBrush  *brush;   /* currently selected brush, or NULL */
 	GdiPen    *pen;      /* currently selected pen, or NULL */
+	HPALETTE   palette;   /* currently selected palette, or NULL - see SelectPalette */
 	COLORREF   bkColor;   /* SetBkColor - only meaningful as the
 	                       * *source* DC of a BitBlt into a
 	                       * monochrome destination (real GDI's
@@ -328,12 +330,14 @@ VOID GdiFlush(VOID)
 	 * to finish; every call here is already synchronous. */
 }
 
-BOOL SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd)
+HPALETTE SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd)
 {
-	(void)hdc;
-	(void)hPal;
-	(void)bForceBkgd;
-	return TRUE; /* no 256-color palette to realize against a truecolor target */
+	GdiDC *dc = (GdiDC *)hdc;
+	HPALETTE prev = dc->palette;
+
+	(void)bForceBkgd; /* no 256-color palette to realize against a truecolor target */
+	dc->palette = hPal;
+	return prev;
 }
 
 UINT RealizePalette(HDC hdc)
@@ -615,4 +619,172 @@ HBITMAP LoadBitmapFile(LPCTSTR szFilename, BOOL bPalette)
 	free(rowBuf);
 	fclose(f);
 	return (HBITMAP)bmp;
+}
+
+/* ---- palettes and DIB<->device-bitmap conversion --------------------------------
+ * See gdi.h's header comment on CreatePalette/CreateDIBitmap/GetDIBits
+ * for why CreatePalette doesn't need to store the color table (nothing
+ * ever reads it back) while the other two do real pixel-format work. */
+
+static DWORD dib_row_bytes(INT width, INT bitCount)
+{
+	return (DWORD)(((width * bitCount) + 31) / 32 * 4);
+}
+
+HPALETTE CreatePalette(CONST LOGPALETTE *lplgpl)
+{
+	GdiPen *obj = (GdiPen *)calloc(1, sizeof(GdiPen)); /* borrowing GdiPen's shape - only .type is ever read */
+
+	(void)lplgpl;
+	obj->type = GDI_OBJ_PALETTE;
+	return (HPALETTE)obj;
+}
+
+HBITMAP CreateDIBitmap(HDC hdc, CONST BITMAPINFOHEADER *lpbmih, DWORD fdwInit,
+                        CONST VOID *lpbInit, CONST BITMAPINFO *lpbmi, UINT fuUsage)
+{
+	GdiBitmap *bmp;
+	INT width = lpbmih->biWidth;
+	BOOL sourceTopDown = (lpbmih->biHeight < 0);
+	INT height = sourceTopDown ? -lpbmih->biHeight : lpbmih->biHeight;
+	DWORD rowBytes;
+	CONST BYTE *src = (CONST BYTE *)lpbInit;
+	INT row;
+
+	(void)hdc;
+	(void)fuUsage;
+
+	if (width <= 0 || height <= 0 || !(fdwInit & CBM_INIT) || src == NULL)
+		return NULL;
+
+	/* Only the bit depths this codebase's own skin bitmaps actually use
+	 * (8-bit paletted, 24/32-bit truecolor) are supported - same
+	 * narrowing LoadBitmapFile above already documents for the same
+	 * reason (1/4-bit and BI_BITFIELDS-packed 16-bit DIBs never occur
+	 * in a real HP-28C skin). */
+	if (lpbmih->biBitCount != 8 && lpbmih->biBitCount != 24 && lpbmih->biBitCount != 32)
+		return NULL;
+
+	rowBytes = dib_row_bytes(width, lpbmih->biBitCount);
+
+	bmp = (GdiBitmap *)calloc(1, sizeof(GdiBitmap));
+	bmp->type = GDI_OBJ_BITMAP;
+	bmp->width = width;
+	bmp->height = height;
+	bmp->topDown = TRUE; /* normalized on the way in, same as LoadBitmapFile above */
+
+	if (lpbmih->biBitCount == 8) {
+		UINT numColors = lpbmi->bmiHeader.biClrUsed ? lpbmi->bmiHeader.biClrUsed : 256;
+
+		if (numColors > 256)
+			numColors = 256;
+		bmp->bpp = 8;
+		bmp->pixels8 = (BYTE *)calloc((size_t)width * height, 1);
+		bmp->paletteCount = numColors;
+		memcpy(bmp->palette, lpbmi->bmiColors, numColors * sizeof(RGBQUAD));
+
+		for (row = 0; row < height; ++row) {
+			INT destRow = sourceTopDown ? row : (height - 1 - row);
+
+			memcpy(&bmp->pixels8[(size_t)destRow * width], src + (size_t)row * rowBytes, (size_t)width);
+		}
+	} else {
+		INT bytesPerPixel = lpbmih->biBitCount / 8; /* 3 (24-bit) or 4 (32-bit) */
+
+		bmp->bpp = 32;
+		bmp->pixels32 = (DWORD *)calloc((size_t)width * height, sizeof(DWORD));
+
+		for (row = 0; row < height; ++row) {
+			INT destRow = sourceTopDown ? row : (height - 1 - row);
+			CONST BYTE *srcRow = src + (size_t)row * rowBytes;
+			INT x;
+
+			for (x = 0; x < width; ++x) {
+				/* DIB pixel bytes are always stored Blue,Green,Red(,pad)
+				 * in memory - reconstruct through RGB() rather than
+				 * reading the bytes as a native DWORD, same reasoning
+				 * LoadBitmapFile's loop above already relies on. */
+				BYTE b = srcRow[x * bytesPerPixel + 0];
+				BYTE g = srcRow[x * bytesPerPixel + 1];
+				BYTE r = srcRow[x * bytesPerPixel + 2];
+
+				bmp->pixels32[(size_t)destRow * width + x] = RGB(r, g, b);
+			}
+		}
+	}
+	return (HBITMAP)bmp;
+}
+
+INT GetDIBits(HDC hdc, HBITMAP hbmp, UINT uStartScan, UINT cScanLines,
+              LPVOID lpvBits, LPBITMAPINFO lpbi, UINT uUsage)
+{
+	GdiBitmap *bmp = (GdiBitmap *)hbmp;
+	DWORD rowBytes;
+
+	(void)hdc;
+	(void)uStartScan;
+	(void)uUsage;
+
+	if (bmp == NULL)
+		return 0;
+
+	/* This shim's bitmaps are only ever 8-bit paletted or 32-bit
+	 * truecolor internally (see GdiBitmap's own comment in this file),
+	 * so that's what gets reported here regardless of what bit depth
+	 * the original on-disk file was - callers that only care about
+	 * pixel values (this codebase's one real caller, FILES.C's
+	 * CreateRgnFromBitmap) work from whatever biBitCount comes back,
+	 * same as real GDI callers do against any device's native depth. */
+	lpbi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	lpbi->bmiHeader.biWidth = bmp->width;
+	lpbi->bmiHeader.biHeight = bmp->height; /* always reported bottom-up, matching a real positive-biHeight DIB */
+	lpbi->bmiHeader.biPlanes = 1;
+	lpbi->bmiHeader.biBitCount = (WORD)bmp->bpp;
+	lpbi->bmiHeader.biCompression = BI_RGB;
+	rowBytes = dib_row_bytes(bmp->width, bmp->bpp);
+	lpbi->bmiHeader.biSizeImage = rowBytes * bmp->height;
+	lpbi->bmiHeader.biXPelsPerMeter = 0;
+	lpbi->bmiHeader.biYPelsPerMeter = 0;
+	lpbi->bmiHeader.biClrUsed = (bmp->bpp == 8) ? bmp->paletteCount : 0;
+	lpbi->bmiHeader.biClrImportant = 0;
+
+	if (bmp->bpp == 8) {
+		UINT i;
+
+		for (i = 0; i < bmp->paletteCount; ++i)
+			lpbi->bmiColors[i] = bmp->palette[i];
+	}
+
+	if (lpvBits == NULL || cScanLines == 0)
+		return bmp->height; /* query-only call, matching real GetDIBits */
+
+	{
+		BYTE *dst = (BYTE *)lpvBits;
+		INT row;
+
+		for (row = 0; row < (INT)cScanLines && row < bmp->height; ++row) {
+			/* Output is always bottom-up (row 0 of lpvBits == the
+			 * bitmap's bottom scanline), matching real GetDIBits'
+			 * default and what CreateRgnFromBitmap assumes. */
+			INT srcY = bmp->height - 1 - row;
+			BYTE *destRow = dst + (size_t)row * rowBytes;
+			INT x;
+
+			if (bmp->bpp == 8) {
+				INT storedRow = bmp->topDown ? srcY : (bmp->height - 1 - srcY);
+
+				memcpy(destRow, &bmp->pixels8[(size_t)storedRow * bmp->width], (size_t)bmp->width);
+			} else {
+				for (x = 0; x < bmp->width; ++x) {
+					COLORREF c = bitmap_get_pixel(bmp, x, srcY);
+
+					destRow[x * 4 + 0] = (BYTE)((c >> 16) & 0xFF); /* blue */
+					destRow[x * 4 + 1] = (BYTE)((c >> 8) & 0xFF);  /* green */
+					destRow[x * 4 + 2] = (BYTE)(c & 0xFF);          /* red */
+					destRow[x * 4 + 3] = 0;
+				}
+			}
+		}
+	}
+	return (INT)cScanLines;
 }
