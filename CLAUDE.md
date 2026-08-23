@@ -142,15 +142,24 @@ shim/                    New code only: Win32-type/API compatibility
                          alongside everything else. Vendor code's own
                          EMU28.H already declares the prototype, so
                          nothing needed to change on the calling side.
-  sdl_main.c             SDL2 platform layer (milestone 4, first
-                         slice): opens a real on-screen window and
-                         renders the composited skin+LCD through
-                         gdi.h/DISPLAY.C's pipeline. Does not yet
-                         parse a real .KML script, run the CPU-
-                         emulation thread, or handle input - see the
-                         file's own header comment and the milestone 4
-                         notes below for the reasoning and what's
-                         still ahead. Milestone 8 added the rest of
+  sdl_main.c             SDL2 platform layer. Milestone 4's first
+                         slice opened a real on-screen window and
+                         rendered the composited skin+LCD through
+                         gdi.h/DISPLAY.C's pipeline against hand-set
+                         values. Milestone 9 replaced that with the
+                         real thing - KML.C's real InitKML() parses
+                         the real skin script, and ENGINE.C's real
+                         WorkerThread runs as an actual CPU-emulation
+                         thread against a real ROM - see milestone 9's
+                         notes below for the full writeup, the
+                         hPalette crash it surfaced and fixed, and the
+                         real "Memory Lost" boot screen this now
+                         produces. Keyboard/mouse input still doesn't
+                         exist - the file's own header comment has the
+                         current, accurate list of what's still ahead
+                         (this note no longer tries to keep its own
+                         separate copy in sync). Milestone 8 added the
+                         rest of
                          EMU28.C's own globals (settings flags, four
                          more CRITICAL_SECTIONs, dialog/thread/palette
                          handles, DDE's inert identifiers, a real
@@ -490,10 +499,12 @@ as literal dialogs).
    entirely - confirming the SDL plumbing, not just the GDI shim
    underneath it, is correct.
 
-   Deliberately out of scope for this slice (see the file's own header
-   comment for the reasoning on each): parsing a real `.KML` script via
-   `KML.C`'s `InitKML()` (its code path also touches FILES.C's
-   ROM-loading/patch-checking functions for any skin with a `Rom` line,
+   Deliberately out of scope for this slice at the time (see the
+   file's own *current* header comment for what's still actually out
+   of scope today - both items below were resolved in milestone 9, see
+   its notes far below): parsing a real `.KML` script via `KML.C`'s
+   `InitKML()` (its code path also touches FILES.C's ROM-loading/
+   patch-checking functions for any skin with a `Rom` line,
    which `REAL28CL.KML` has - a separate follow-up, not this slice's;
    this file calls `CreateMainBitmap`/`CreateLcdBitmap` directly
    instead, with the real skin's `Lcd Zoom 2 / Offset 474 177` values
@@ -502,7 +513,8 @@ as literal dialogs).
    thread/event-sync primitives it needs are done now - see below -
    but nothing calls `ENGINE.C`'s `WorkerThread` yet, and doing that
    usefully needs a ROM, which needs FILES.C too); keyboard/mouse
-   input; window resizing/menus/dialogs (the stub functions in
+   input (still genuinely out of scope); window resizing/menus/dialogs
+   (still genuinely out of scope - the stub functions in
    `sdl_main.c` are the minimum needed to satisfy `DISPLAY.C`'s *other*
    functions, which still get compiled into its object file and still
    need their symbols to resolve even though this slice never calls
@@ -566,10 +578,11 @@ as literal dialogs).
    `WaitForSingleObject` failing cleanly instead of misinterpreting
    the union and crashing.
 
-   Not yet done: actually calling `CreateThread` on `ENGINE.C`'s
-   `WorkerThread` from `sdl_main.c` - see the milestone 4 note above on
-   why that's blocked on FILES.C/ROM loading to be useful, not on
-   anything in this primitive layer.
+   RESOLVED (milestone 9): `CreateThread` on `ENGINE.C`'s
+   `WorkerThread` is called for real now, once FILES.C's ROM loading
+   (milestone 7) made it worth doing - see milestone 9's notes below
+   for the full writeup, including the real "Memory Lost" boot screen
+   this produces against a genuine ROM image.
 5. ~~Stub `SETTINGS.C` (registry) to a flat config file~~ - done, and
    turned out simpler than the milestone name suggests: `SETTINGS.C`'s
    own `#if !defined REGISTRY` split (`REGISTRY` is commented out, so
@@ -839,6 +852,108 @@ as literal dialogs).
    function, the way a real link's "conflicting types"/duplicate-symbol
    errors can and did, twice, this session).
 
+9. **Real ROM loading, real KML parsing, and a real running CPU thread**
+   - the milestone-4-completion work milestone 8's own notes explicitly
+   deferred ("this doesn't change runtime behavior... that's real
+   milestone-4-completion work, still ahead"). Done now, same session.
+   `shim/sdl_main.c` no longer drives `DISPLAY.C` by hand - it calls
+   `KML.C`'s real `InitKML("REAL28CL.KML", TRUE)`, whose own Global/
+   Background/Lcd block handlers call `FILES.C`'s real `MapRom`/
+   `CreateMainBitmap` and set `nBackgroundX/Y/W/H`/`nLcdX/Y/nLcdZoom`
+   for real - the `REAL28C.KMI`-derived values milestones 4-8 hand-set
+   are gone; the KML parser now produces the same numbers itself
+   (confirmed by the screenshot below matching earlier ones pixel-for-
+   pixel in skin/LCD-region placement). `szEmuDirectory`/
+   `szCurrentDirectory` (real Emu28 globals, previously unset by this
+   port) get real values at startup - `szEmuDirectory` an absolute path
+   to `skins/hp28c` (captured via `getcwd()`, not a relative literal,
+   since `MapRom`'s own inner `SetCurrentDirectory(szEmuDirectory)`
+   call happens *after* the process's CWD has already moved once), so
+   `InitKML`/`MapRom`'s own internal `SetCurrentDirectory` brackets
+   resolve correctly regardless of where the binary is actually
+   launched from. See "ROM images" above for the `HP28C.ROM` symlink
+   this needs to find a real ROM.
+
+   Then `ENGINE.C`'s real `WorkerThread` gets started for real:
+   `hEventShutdn = CreateEvent(...)` (a real event now, not a
+   NULL/declared-only handle) followed by
+   `CreateThread(...WorkerThread...)`. `ENGINE.C`'s own `nNextState`
+   starts at `SM_RUN` (its static initializer, not something this file
+   sets), so the worker thread begins executing real Saturn opcodes
+   against the real, just-loaded ROM the instant it starts - no
+   separate `SwitchToState(SM_RUN)` call needed. Since
+   `StartDisplay()`'s intended periodic-redraw timer callback is still
+   a no-op stub (`timeSetEvent`, milestone 4's own placeholder,
+   unchanged), the main thread's per-frame loop now calls
+   `UpdateMainDisplay()` itself every frame instead of only once before
+   the loop - real, cross-thread-safe (`UpdateMainDisplay` takes
+   `csGDILock` internally, the same lock the worker thread's own writes
+   use), and the only way this port currently has of keeping the LCD
+   live against a thread it doesn't otherwise get redraw notifications
+   from.
+
+   Two real bugs surfaced immediately, both from the same root cause
+   as this session's two earlier duplicate-symbol bugs (a milestone-4
+   placeholder value that was harmless when nothing real ever touched
+   it, and stopped being harmless the instant real code actually ran
+   against it):
+   - `hPalette` was initialized to a dummy non-NULL sentinel value
+     (`(HPALETTE)(intptr_t)1`) back when `SelectPalette`/
+     `RealizePalette` were no-ops and nothing else ever inspected it.
+     `KML.C`'s real `KillKML()` - called as the very first line of
+     `InitKML()`, unconditionally - does `if (hPalette) { ...;
+     DeleteObject(hPalette); }`, and `gdi.c`'s real `DeleteObject`
+     dereferences its argument's type tag without expecting a fake
+     pointer value - immediate segfault on the very first `InitKML`
+     call, caught by an `lldb` backtrace pointing straight at
+     `DeleteObject` -> `KillKML` -> `InitKML` -> `main`. Fixed by
+     initializing `hPalette` to real, plain `NULL` instead - the
+     correct Win32-faithful starting value regardless, now that
+     `FILES.C`'s `DecodeBmp`/`DecodePng` (real, milestone 7) correctly
+     create a real palette on demand via `CreatePalette` when
+     `hPalette == NULL`, and `KillKML`'s own `if (hPalette)` guard
+     already handles the "never created one" case by skipping the
+     delete.
+   - A test-harness bug, not a shim bug, but worth recording alongside
+     the real one above: the first screenshot-based verification
+     attempt (see below) initially took its screenshot on the very
+     first rendered frame, before the worker thread had done anything
+     visible yet - moved the trigger to frame 60 (~1 second of real
+     wall-clock CPU execution) once the display kept coming back blank
+     despite the thread demonstrably not crashing.
+
+   Verified with the strongest evidence this project can produce for a
+   UI-facing change - an actual screenshot of the live, running
+   emulator, not just "the process didn't crash": after `InitKML`
+   alone (CPU thread not yet started), a pixel-perfect render of the
+   real HP-28C skin with a blank LCD (Chipset still zero-initialized) -
+   confirming the KML parser's own background/LCD placement values
+   exactly reproduce what milestones 4-8 had been hand-setting. Then,
+   with the CPU thread running for ~1 real second against the genuine
+   `28C_1CC.ROM`: **the LCD shows "Memory Lost" followed by a 3/2/1
+   stack display** - the exact, authentic boot sequence a real HP-28C
+   shows on a cold start with uninitialized RAM. This is independent
+   confirmation, from the calculator's own ROM-driven behavior (not
+   anything this port's code asserts about itself), that the whole
+   stack actually works end to end: real KML parsing, real ROM
+   loading and unpacking, real Saturn opcode execution
+   (`ENGINE.C`/`OPCODES.C`/`MOPS.C`/`FETCH.C`/`RPL.C`/`STACK.C`), real
+   LCD-writing opcodes reaching the real display-compositing pipeline,
+   across a real second CPU thread synchronized against the main
+   thread via real critical sections. Re-ran all three of milestone
+   7-8's standalone real-behavior test harnesses (ROM unpack,
+   `CreateDIBitmap`/`GetDIBits` round-trip, path-splitting/file-mapping
+   primitives) afterward with zero regressions.
+
+   Explicitly still not done, same "narrower than it sounds" caveat as
+   every milestone in this range: no keyboard/mouse input exists yet
+   (the calculator boots and then genuinely waits, correctly, for a
+   keypress that can never come - this port has no way to send it one),
+   there's no real periodic-timer-driven redraw (only this file's own
+   per-frame poll), and shutdown doesn't join `hThread` (the process
+   just exits with the worker thread still technically alive - fine
+   for now, not fine for a real "quit cleanly" story later).
+
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the
 untouched-engine files, linked into an SDL2 executable) is the likely
@@ -853,6 +968,16 @@ Never committed here - see `.gitignore` and `README.md`. Emu28's own
 author has no license to redistribute HP-28C ROM images; this project
 follows the same policy `vger` and `soynut` already follow for their own
 ROM dependencies.
+
+To actually run the emulator (milestone 9 on): `skins/hp28c/REAL28CL.KML`'s
+own `Rom "HP28C.ROM"` line expects a ROM file by that exact name next to
+it. Point `skins/hp28c/HP28C.ROM` (a symlink is fine, and - like any
+`*.ROM` file - gitignored automatically, never committed) at whatever
+real HP-28C ROM dump you have, e.g.:
+`ln -s ../../28C_1CC.ROM skins/hp28c/HP28C.ROM` from the repo root. This
+is a local run-time setup step, not something `shim/sdl_main.c` does on
+your behalf - it doesn't know or care what the real ROM file happens to
+be named, only that the KML script's own filename resolves.
 
 ## License
 

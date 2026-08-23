@@ -3,34 +3,32 @@
  *
  *   This file is part of the Emu28 macOS/Linux port (see ../CLAUDE.md).
  *
- *   SDL2 platform layer (milestone 4) - first slice. Proves the
- *   rendering pipeline built in milestones 1-3 works end to end in a
- *   real, on-screen SDL2 window: it calls DISPLAY.C's already-proven
- *   CreateMainBitmap/CreateLcdBitmap/UpdateMainDisplay directly
- *   against the real skin bitmap (skins/hp28c/REAL28C.BMP) and its
- *   real Lcd Zoom/Offset values (read out of REAL28C.KMI by hand for
- *   now), uploads the composited hWindowDC into an SDL2 texture, and
- *   presents it.
+ *   SDL2 platform layer. Milestone 4's first slice proved the
+ *   rendering pipeline end to end against hand-set values; milestone 9
+ *   replaced that with the real thing: KML.C's InitKML() parses the
+ *   real skin script (skins/hp28c/REAL28CL.KML), whose Global/
+ *   Background/Lcd blocks call FILES.C's real MapRom/CreateMainBitmap
+ *   and set nBackgroundX/Y/W/H and nLcdX/Y/nLcdZoom for real - no more
+ *   hand-read KMI values - and ENGINE.C's real WorkerThread runs as an
+ *   actual CPU-emulation thread against the real ROM, with
+ *   UpdateMainDisplay() polled once per frame from the main thread
+ *   (cross-thread safe via csGDILock) since the winmm periodic-timer
+ *   callback StartDisplay() would normally use is still a no-op stub
+ *   (see timeSetEvent below) - see CLAUDE.md's milestone 9 notes for
+ *   the full writeup, including the real "Memory Lost" boot screen
+ *   this produces against a virgin ROM image.
  *
- *   Deliberately NOT yet in scope (later slices of this same
- *   milestone):
- *     - Parsing a real .KML script end to end via KML.C's InitKML().
- *       InitKML's code path also touches FILES.C's ROM-loading/
- *       ROM-patch-checking functions (CheckForBeepPatch, MapRom, ...)
- *       for any skin that references a Rom line (REAL28CL.KML does) -
- *       that's FILES.C's real job, not this slice's. This file
- *       bypasses KML.C's parser and drives DISPLAY.C's bitmap/LCD
- *       setup directly instead.
- *     - The CPU-emulation worker thread (ENGINE.C's WorkerThread) and
- *       the real event/thread-sync primitives it needs
- *       (CreateThread/CreateEvent/WaitForSingleObject) - see
- *       win32_types.h's "thread/event synchronization" section for
- *       why those stayed declared-only through milestone 3: a real
- *       Win32 HANDLE is a polymorphic kernel object (WaitForSingleObject
- *       is called on both event and thread handles), which needs a
- *       tagged-handle design this file doesn't attempt yet.
+ *   Still NOT in scope:
  *     - Keyboard/mouse input (KEYBOARD.C's ScanKeyboard/KeyboardEvent,
- *       KML.C's MouseIsButton/MouseButtonDownAt/...).
+ *       KML.C's MouseIsButton/MouseButtonDownAt/...) - the emulator
+ *       runs and boots, but nothing can be typed at it yet.
+ *     - A real winmm periodic timer (see timeSetEvent's own comment
+ *       below) - StartDisplay()'s intended periodic redraw never
+ *       fires; this file's own per-frame UpdateMainDisplay() poll is
+ *       what actually keeps the LCD live instead.
+ *     - Clean thread shutdown - hThread is never joined on exit (the
+ *       process just exits with the worker thread mid-flight); fine
+ *       for now, not fine for a real "File > Exit."
  *     - Window resizing, menus, dialogs - see win32_types.h's "window
  *       management" section; the stub functions below are the
  *       minimum needed to satisfy DISPLAY.C's *other* functions
@@ -49,18 +47,24 @@
 
 #include "win32_types.h"
 #include "gdi.h"
+#include "win32_handle.h"
 #include "Emu28.h"
 #include "kml.h"
 
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 /* ---- globals DISPLAY.C references via EMU28.H/KML.H --------------------------------
  * Normally defined in EMU28.C/KML.C, neither of which this slice
  * links (see the file header comment). */
 
-HPALETTE hPalette = (HPALETTE)(intptr_t)1; /* dummy non-NULL: SelectPalette/RealizePalette are no-ops */
+HPALETTE hPalette; /* starts real-Win32-correct NULL, not a dummy sentinel: milestone 9's KML.C now calls the real
+                     * CreatePalette/DeleteObject on this (FILES.C's DecodeBmp creates one on demand when
+                     * hPalette == NULL, KillKML deletes it when non-NULL) - a fake non-NULL placeholder value
+                     * here made KillKML's real DeleteObject(hPalette) segfault the first time this file
+                     * actually linked against KML.C's real KillKML() instead of nothing calling it at all. */
 HWND     hWnd;                              /* set to a real opaque token in main(), once g_window exists */
 HDC      hWindowDC;
 CRITICAL_SECTION csGDILock;
@@ -258,7 +262,8 @@ int main(int argc, char **argv)
 	SDL_Texture *texture;
 	HBITMAP hWindowBitmap;
 	BOOL running = TRUE;
-	const char *bmpPath = argc > 1 ? argv[1] : "skins/hp28c/REAL28C.BMP";
+	const char *kmlName = argc > 1 ? argv[1] : "REAL28CL.KML";
+	char cwd[MAX_PATH];
 
 	InitializeCriticalSection(&csGDILock);
 	InitializeCriticalSection(&csLcdLock);
@@ -296,24 +301,61 @@ int main(int argc, char **argv)
 	hWindowBitmap = CreateCompatibleBitmap(NULL, winW, winH);
 	SelectObject(hWindowDC, hWindowBitmap);
 
-	if (!CreateMainBitmap(bmpPath)) {
-		fprintf(stderr, "CreateMainBitmap(%s) failed\n", bmpPath);
+	/* szEmuDirectory/szCurrentDirectory bracket every relative file
+	 * access InitKML/MapRom/CreateMainBitmap make (each does
+	 * SetCurrentDirectory(szEmuDirectory) ... SetCurrentDirectory(
+	 * szCurrentDirectory) around its own CreateFile calls) - real
+	 * EMU28.C sets these once at startup to the install directory and
+	 * the launch-time CWD respectively; this port's equivalent is the
+	 * skin directory and wherever the process was actually launched
+	 * from. getcwd(), not a relative "." literal, because the second
+	 * SetCurrentDirectory(szEmuDirectory) call (MapRom's, inside
+	 * InitKML's own Rom-line handling) needs an absolute path to
+	 * return to - by then the process's real CWD is already
+	 * skins/hp28c, not wherever it started. */
+	if (getcwd(cwd, sizeof(cwd)) == NULL) {
+		fprintf(stderr, "getcwd failed\n");
+		return 1;
+	}
+	lstrcpyn(szCurrentDirectory, cwd, ARRAYSIZEOF(szCurrentDirectory));
+	lstrcpyn(szEmuDirectory, cwd, ARRAYSIZEOF(szEmuDirectory));
+	lstrcat(szEmuDirectory, "/skins/hp28c");
+
+	/* InitKML (KML.C) parses the real .KML script end to end: its
+	 * Global block's Rom/Bitmap lines call FILES.C's real MapRom/
+	 * CreateMainBitmap, its Background/Lcd blocks set
+	 * nBackgroundX/Y/W/H and nLcdX/Y/nLcdZoom for real (no more hand-
+	 * read values), and it calls DISPLAY.C's ResizeMainBitmap/
+	 * CreateLcdBitmap internally too - see KML.C's InitGlobal/
+	 * InitBackground/InitLcd. bNoLog=TRUE skips the "always show the
+	 * parse log" path on success (win32_ui_stub.c's DialogBoxParam
+	 * stub would otherwise make that path look like the user hit
+	 * Cancel - see CLAUDE.md's milestone 9 notes for why that's safe
+	 * either way, just noisier than needed here). */
+	if (!InitKML((LPTSTR)kmlName, TRUE)) {
+		fprintf(stderr, "InitKML(%s) failed - is skins/hp28c/HP28C.ROM present (see CLAUDE.md)?\n", kmlName);
 		return 1;
 	}
 
-	nBackgroundW = winW;
-	nBackgroundH = winH;
-	nBackgroundX = 0;
-	nBackgroundY = 0;
-	nLcdX = 474; /* skins/hp28c/REAL28C.KMI: "Lcd { Offset 474 177  Zoom 2 }" */
-	nLcdY = 177;
-	nLcdZoom = 2;
-
 	/* paint the full calculator body once, like EMU28.C's OnPaint would */
 	BitBlt(hWindowDC, 0, 0, winW, winH, hMainDC, 0, 0, SRCCOPY);
-
-	CreateLcdBitmap();   /* sets up the LCD compositing buffers, draws the initial (display-off) state */
 	UpdateMainDisplay(); /* composites current LCD state onto hWindowDC (all-zero Chipset -> display off) */
+
+	/* ENGINE.C's own nNextState starts at SM_RUN (its static
+	 * initializer, not something this file sets), so WorkerThread
+	 * begins executing real opcodes against the just-loaded ROM the
+	 * instant this thread starts - no separate SwitchToState(SM_RUN)
+	 * call needed. hEventShutdn has to be a real event before that
+	 * happens: the very first opcode loop that hits a SHUTDN
+	 * (real hardware's own "go to sleep waiting for input" state -
+	 * expected quickly, since nothing can be typed at it yet) calls
+	 * WaitForSingleObject(hEventShutdn, INFINITE), and this shim's
+	 * WaitForSingleObject dereferences its HANDLE argument
+	 * unconditionally - a NULL hEventShutdn here would crash the
+	 * worker thread within its first few hundred opcodes, not at
+	 * startup, which is what made this worth calling out explicitly. */
+	hEventShutdn = CreateEvent(NULL, FALSE, FALSE, NULL);
+	hThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)WorkerThread, NULL, 0, NULL);
 
 	printf("Emu28: window open (close it to exit).\n");
 
@@ -327,9 +369,16 @@ int main(int argc, char **argv)
 				running = FALSE;
 		}
 
+		/* the worker thread changes Chipset/the LCD state continuously
+		 * once running; re-composite from it every frame rather than
+		 * waiting for a StartDisplay()-driven timer callback that
+		 * doesn't really fire yet (see this file's header comment).
+		 * Cross-thread safe: UpdateMainDisplay() takes csGDILock
+		 * internally, same as the worker thread's own writes do. */
+		UpdateMainDisplay();
+
 		/* re-upload every frame: cheap at this resolution/frame rate,
-		 * and side-steps needing a "did anything change" dirty flag
-		 * before there's an actual CPU thread updating the display */
+		 * and side-steps needing a "did anything change" dirty flag */
 		SDL_LockTexture(texture, NULL, &pixels, &pitch);
 		for (y = 0; y < winH; ++y) {
 			Uint32 *row = (Uint32 *)((BYTE *)pixels + y * pitch);
