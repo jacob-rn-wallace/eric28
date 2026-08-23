@@ -254,9 +254,15 @@ shim/                    New code only: Win32-type/API compatibility
                          itself) still resolve to vendor/'s own files
                          first, which is why PCH.H can't be replaced
                          this way, only what it includes.
-COPYING.TXT              GPL-2.0 license text (from
-                         hp.giesselink.com/COPYING.TXT).
 ```
+
+`LICENSE` (repo root) is the GPL-2.0 text, fetched from
+`hp.giesselink.com/COPYING.TXT` when this project started (see
+`DEVLOG.md`) and saved under GitHub's conventional `LICENSE` filename
+so the repo's license badge picks it up. A byte-identical `COPYING.TXT`
+copy existed alongside it until removed as redundant - `git log` has
+the history if the original vendored-provenance copy is ever wanted
+back.
 
 ### Why vendor/ stays pristine
 
@@ -1039,6 +1045,6 @@ be named, only that the KML script's own filename resolves.
 
 ## License
 
-GPL-2.0, inherited from upstream Emu28 - see `COPYING.TXT`. Any new code
+GPL-2.0, inherited from upstream Emu28 - see `LICENSE`. Any new code
 under `shim/` is GPL-2.0 too, as a derivative work building directly on
 Emu28's engine.

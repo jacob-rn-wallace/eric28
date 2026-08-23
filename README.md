@@ -73,5 +73,5 @@ uploading if you own real hardware.
 
 ## License
 
-GPL-2.0, inherited from upstream Emu28 (see `COPYING.TXT`). Any new code
+GPL-2.0, inherited from upstream Emu28 (see `LICENSE`). Any new code
 in `shim/` is licensed the same way, as a derivative work.
