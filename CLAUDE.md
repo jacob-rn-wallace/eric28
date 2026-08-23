@@ -154,11 +154,15 @@ shim/                    New code only: Win32-type/API compatibility
                          notes below for the full writeup, the
                          hPalette crash it surfaced and fixed, and the
                          real "Memory Lost" boot screen this now
-                         produces. Keyboard/mouse input still doesn't
-                         exist - the file's own header comment has the
-                         current, accurate list of what's still ahead
-                         (this note no longer tries to keep its own
-                         separate copy in sync). Milestone 8 added the
+                         produces. Milestone 10 wired mouse-click input
+                         (SDL_MOUSEBUTTONDOWN/UP into KML.C's real
+                         MouseButtonDownAt/MouseButtonUpAt) - see that
+                         milestone's notes for the "typed a live 0 onto
+                         the command line" screenshot verification. The
+                         file's own header comment has the current,
+                         accurate list of what's still ahead (this note
+                         no longer tries to keep its own separate copy
+                         in sync). Milestone 8 added the
                          rest of
                          EMU28.C's own globals (settings flags, four
                          more CRITICAL_SECTIONs, dialog/thread/palette
@@ -953,6 +957,53 @@ as literal dialogs).
    per-frame poll), and shutdown doesn't join `hThread` (the process
    just exits with the worker thread still technically alive - fine
    for now, not fine for a real "quit cleanly" story later).
+
+10. **Keyboard input, via mouse clicks on the skin** - real HP-28C
+    calculators (and Emu28) have no physical keyboard input at all in
+    the sense a PC does; every key is a clickable region on the
+    calculator picture itself, per `skins/hp28c/REAL28C.KMI`'s own
+    `Button` blocks (each with an `Offset`/`Size` hit-rectangle and an
+    `OutIn` pair identifying which row/column of the Saturn's keyboard
+    matrix it wires to). `shim/sdl_main.c`'s event loop now forwards
+    `SDL_MOUSEBUTTONDOWN`/`SDL_MOUSEBUTTONUP` (left button only) into
+    `KML.C`'s real, already-compiling `MouseButtonDownAt`/
+    `MouseButtonUpAt` - unchanged real vendor code that hit-tests the
+    click against every defined button, then calls `KEYBOARD.C`'s real
+    `KeyboardEvent` to set/clear that key's bit in
+    `Chipset.Keyboard_Row`. No new design was needed for the "wake a
+    sleeping CPU thread on keypress" half either -
+    `KeyboardEvent`'s own `ScanKeyboard(FALSE,FALSE)` call already does
+    a real `SetEvent(hEventShutdn)` when a key becomes pressed while
+    `Chipset.Shutdn` is set, and `hEventShutdn` has been a real event
+    since milestone 9 - so a click during the CPU's post-boot SHUTDN
+    wait correctly resumes it with zero new plumbing.
+
+    Deliberately narrow: only click-to-press is wired, not mouse-move
+    cursor feedback (`KML.C`'s real `MouseMovesTo` `_ASSERT`s that
+    `hCursorArrow`/`hCursorHand` are non-NULL `HCURSOR`s, which nothing
+    in this port creates - rather than fabricate cursor handles just to
+    satisfy an assert for a purely cosmetic hover effect, that function
+    is simply never called yet). Keyboard-shortcut input (a real PC
+    keyboard key mapped to a calculator button, `KML.C`'s `Scancode`
+    blocks) isn't wired either - mouse clicks on the skin are enough to
+    prove the whole input path works.
+
+    Verified the same way as milestone 9 - an actual screenshot, not
+    just "didn't crash": with the emulator already at its post-boot
+    "Memory Lost" idle state (correctly asleep, waiting for a keypress
+    that couldn't previously come), a test harness synthesized a real
+    `SDL_MOUSEBUTTONDOWN`/`UP` pair at the "0" key's real hit-rectangle
+    center (read directly out of `REAL28C.KMI`'s own `Button 72`/
+    `Offset 528 584`/`Size 47 31` - not eyeballed off a screenshot) via
+    `SDL_PushEvent`. Result: **the LCD shows a live "0" with a blinking
+    cursor on the command line** - the exact, correct HP-28C response
+    to typing a digit at an empty stack. This confirms the full
+    round trip for real: SDL mouse event -> real button hit-testing ->
+    real keyboard-matrix update -> real CPU-thread wakeup from a real
+    sleep -> real command-line editing inside the ROM's own code ->
+    real LCD compositing back out. Re-ran all of milestones 7-9's
+    standalone real-behavior test harnesses afterward with zero
+    regressions.
 
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the

@@ -16,12 +16,24 @@
  *   callback StartDisplay() would normally use is still a no-op stub
  *   (see timeSetEvent below) - see CLAUDE.md's milestone 9 notes for
  *   the full writeup, including the real "Memory Lost" boot screen
- *   this produces against a virgin ROM image.
+ *   this produces against a virgin ROM image. Milestone 10 added
+ *   mouse-click input: SDL_MOUSEBUTTONDOWN/UP feed straight into
+ *   KML.C's real MouseButtonDownAt/MouseButtonUpAt (button hit-testing
+ *   against skins/hp28c/REAL28C.KMI's own Button blocks), which call
+ *   KEYBOARD.C's real KeyboardEvent - including its own real
+ *   SetEvent(hEventShutdn) wake-up when a key is pressed while the CPU
+ *   thread is asleep, no new plumbing needed since hEventShutdn was
+ *   already real as of milestone 9. See CLAUDE.md's milestone 10 notes
+ *   for the screenshot verification (a live "0" typed onto the command
+ *   line via a synthesized click on the real "0" key's hit-rectangle).
  *
  *   Still NOT in scope:
- *     - Keyboard/mouse input (KEYBOARD.C's ScanKeyboard/KeyboardEvent,
- *       KML.C's MouseIsButton/MouseButtonDownAt/...) - the emulator
- *       runs and boots, but nothing can be typed at it yet.
+ *     - Mouse-move cursor feedback (KML.C's real MouseMovesTo
+ *       _ASSERTs hCursorArrow/hCursorHand are non-NULL HCURSORs,
+ *       which nothing here creates - purely cosmetic, so left
+ *       unwired rather than fake the handles) and PC-keyboard
+ *       shortcuts (KML.C's Scancode blocks) - mouse clicks on the
+ *       skin are the only input path so far.
  *     - A real winmm periodic timer (see timeSetEvent's own comment
  *       below) - StartDisplay()'s intended periodic redraw never
  *       fires; this file's own per-frame UpdateMainDisplay() poll is
@@ -367,6 +379,24 @@ int main(int argc, char **argv)
 		while (SDL_PollEvent(&e)) {
 			if (e.type == SDL_QUIT)
 				running = FALSE;
+			/* KML.C's own MouseButtonDownAt/MouseButtonUpAt (real,
+			 * milestone 3) do the rest: find which skin button the
+			 * click landed on, call KEYBOARD.C's real KeyboardEvent to
+			 * set/clear that key's bit in Chipset.Keyboard_Row, and -
+			 * critically - ScanKeyboard's own real SetEvent(hEventShutdn)
+			 * wakes the worker thread back up if it's sitting in its
+			 * SHUTDN wait (which it will be almost immediately after
+			 * booting, since nothing could press a key before now).
+			 * Only left-button down/up are wired - MouseMovesTo's
+			 * cursor-shape feedback needs hCursorArrow/hCursorHand to
+			 * be real, non-NULL HCURSORs (it _ASSERTs on that), which
+			 * nothing in this port creates yet - skip it rather than
+			 * add fake cursor handles just to satisfy an assert for a
+			 * purely cosmetic hover effect. */
+			if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT)
+				MouseButtonDownAt(MK_LBUTTON, (DWORD)e.button.x, (DWORD)e.button.y);
+			else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT)
+				MouseButtonUpAt(0, (DWORD)e.button.x, (DWORD)e.button.y);
 		}
 
 		/* the worker thread changes Chipset/the LCD state continuously
