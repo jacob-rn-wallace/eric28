@@ -162,8 +162,9 @@ extern UINT    RealizePalette(HDC hdc);
  * an on-disk DIB's byte layout (1/8/24/32-bit, B-G-R(-pad) memory
  * order) and this shim's own internal GdiBitmap storage (8-bit
  * paletted or 32-bit packed-COLORREF - see gdi.c's GdiBitmap comment),
- * the same conversion CreateDIBSection/LoadBitmapFile already do by
- * hand elsewhere in this file. */
+ * the same conversion CreateDIBSection does by hand elsewhere in this
+ * file (LoadBitmapFile itself is FILES.C's job now, not this shim's -
+ * see FILES.C's own real BMP/GIF/PNG decoders, milestone 7). */
 
 typedef struct {
 	BYTE peRed;
@@ -273,17 +274,6 @@ extern BOOL    DrawFocusRect(HDC hdc, CONST RECT *lprc);
 extern COLORREF GetTextColor(HDC hdc);
 extern COLORREF SetTextColor(HDC hdc, COLORREF color);
 extern COLORREF GetBkColor(HDC hdc);
-
-/* ---- bitmap file loading ---------------------------------------------------------
- * FILES.C's eventual job long-term; a real, narrow implementation
- * here - just enough to load the uncompressed 24-bpp BMP
- * skins/hp28c/REAL28C.BMP actually is - so this milestone's
- * compositing pipeline can be exercised end to end against the real
- * skin, not only synthetic test bitmaps. Compressed BMPs, non-BMP
- * formats, and the bPalette parameter's 256-color-remap behavior are
- * out of scope; this isn't meant to be FILES.C's eventual full
- * loader. */
-extern HBITMAP LoadBitmapFile(LPCTSTR szFilename, BOOL bPalette);
 
 #ifdef __cplusplus
 }

@@ -133,20 +133,15 @@ shim/                    New code only: Win32-type/API compatibility
                          palette" field and returns the previous one,
                          same shape as SelectObject.
 
-                         KNOWN FOLLOW-UP: FILES.C's own LoadBitmapFile
-                         (BMP+GIF+PNG, with real palette support) is
-                         now the authoritative implementation of that
-                         name, but gdi.c still carries its own older,
-                         narrower BMP-only placeholder too (predating
-                         milestone 7, kept only because sdl_main.c's
-                         already-verified milestone-4 link still calls
-                         it via DISPLAY.C's CreateMainBitmap) - the two
-                         can't be linked into the same binary
-                         (duplicate symbol) until sdl_main.c is updated
-                         to link FILES.C directly instead, which is
-                         blocked on wiring up FILES.C's own further
-                         dependencies (see milestone 7's notes below)
-                         and isn't done yet.
+                         RESOLVED (milestone 8): the LoadBitmapFile
+                         duplicate-symbol conflict flagged here no
+                         longer applies - gdi.c's older, narrower
+                         BMP-only placeholder was removed once the
+                         whole-program link (milestone 8, below) needed
+                         FILES.C's real LoadBitmapFile linked in
+                         alongside everything else. Vendor code's own
+                         EMU28.H already declares the prototype, so
+                         nothing needed to change on the calling side.
   sdl_main.c             SDL2 platform layer (milestone 4, first
                          slice): opens a real on-screen window and
                          renders the composited skin+LCD through
@@ -155,7 +150,20 @@ shim/                    New code only: Win32-type/API compatibility
                          emulation thread, or handle input - see the
                          file's own header comment and the milestone 4
                          notes below for the reasoning and what's
-                         still ahead.
+                         still ahead. Milestone 8 added the rest of
+                         EMU28.C's own globals (settings flags, four
+                         more CRITICAL_SECTIONs, dialog/thread/palette
+                         handles, DDE's inert identifiers, a real
+                         QueryPerformanceFrequency-populated lFreq) so
+                         the whole program - not just DISPLAY.C's own
+                         slice - can link; gave SetWindowTitle a real
+                         SDL_SetWindowTitle-backed body now that the
+                         window genuinely exists; and removed its own
+                         DrawAnnunciator placeholder (KML.C's real one
+                         is linked in now too) - see milestone 8's
+                         notes below for why linking the real thing
+                         alongside the placeholder became a duplicate-
+                         symbol conflict rather than just dead code.
   win32_handle.h,        Tagged-dispatch HANDLE: file, event, and
   win32_handle.c         thread objects behind one opaque HANDLE type,
                          the same SelectObject-style trick gdi.c uses
@@ -206,6 +214,19 @@ shim/                    New code only: Win32-type/API compatibility
                          the symbol still needs *a* body to link, same
                          reasoning as sound_stub.c. STEGANO.C itself
                          stays untouched, per milestone 6.
+  win32_ui_stub.c         Milestone 8: honest-failure/no-op bodies for
+                         every remaining declared-only Win32 function
+                         (menus, dialogs, common controls, resource
+                         loading, clipboard, DDE, GDI font/text output,
+                         window regions, cursor creation, power
+                         status, the rest of winmm, shell folder
+                         browsing, MessageBox, and a handful of
+                         window-management calls) - needed once the
+                         whole-program link (milestone 8, see the
+                         milestone notes below) required every symbol
+                         any linked vendor file references to resolve,
+                         not just the ones sdl_main.c's own code path
+                         happens to call.
   compat/                Fake Win32 SDK / MSVC CRT headers
                          (windows.h, tchar.h, winsock2.h, shellapi.h,
                          commctrl.h, shlobj.h, crtdbg.h, malloc.h,
@@ -723,6 +744,100 @@ as literal dialogs).
    All 24 non-window/registry/sound vendor files (every file left
    except `EMU28.C` and the DirectSound/`waveOut` pair) now compile
    clean.
+
+8. **Whole-program link** - not a planned milestone going in, but a
+   natural question once every non-window/registry/sound/debugger
+   vendor file compiled clean (milestone 7): does the *entire*
+   emulator - every one of those files, plus `DISPLAY.C`/`KML.C`/
+   `SETTINGS.C` from earlier milestones, plus the shim - actually
+   *link* into one real program? Answer: yes, as of this session.
+   `clang`ing every vendor `.C` file except `EMU28.C` (superseded by
+   `sdl_main.c` entirely - see its own note below) and the
+   DirectSound/`waveOut`/`STEGANO.C` trio (still deliberately out of
+   scope) together with every `shim/*.c` file produces a real,
+   running Mach-O executable - confirmed by actually launching it
+   (stays alive, prints its startup message, no crash) rather than
+   just checking the linker's exit code.
+
+   Two files nobody had tried compiling before turned out to already
+   work with zero changes: `REDEYE.C` (infrared "red-eye" printer
+   emulation - `MOPS.C`'s beeper-adjacent `IrPrinter` opcode handler
+   needs it to link) and `PNGCRC.C` (a faster CRC32 table Emu28's own
+   `LODEPNG.H` expects to be linked in externally when compiled with
+   `-DLODEPNG_NO_COMPILE_CRC` - without that flag, `LODEPNG.C`'s own
+   built-in `lodepng_crc32` collides with `PNGCRC.C`'s at link time;
+   this is genuine upstream Emu28 build knowledge, not a shim
+   workaround, worth remembering alongside `-x c` for whenever a real
+   build system exists). `STEGANO.C` remains untouched per milestone 6
+   - genuinely out of scope, not just untested.
+
+   Getting an actual, complete link (not just "every file compiles
+   standalone," which milestones 2-7 had already reached) needed two
+   more kinds of work:
+
+   - **Every remaining declared-only Win32 function needed a real
+     body** - not to make it *work*, but because unlike compiling a
+     single file, linking an executable requires every symbol any
+     linked object file references to resolve, even from functions
+     that are never actually called at runtime (an unreachable
+     function's undefined symbol still blocks the link - dead-code
+     elimination doesn't enter into it without `--gc-sections`, which
+     this ad hoc build doesn't use). `shim/win32_ui_stub.c` (new)
+     collects every one of these: menus, dialogs, common controls
+     (`CreateToolbarEx`/tooltips), resource loading, clipboard, DDE,
+     GDI font/text output, window regions, cursor creation, power
+     status, the remaining winmm periodic-timer functions, shell
+     folder browsing, `MessageBox`, and the handful of window-
+     management calls `DEBUGGER.C`/`KML.C`/`MRU.C` reach for that
+     `sdl_main.c`'s own stubs didn't already cover
+     (`GetCurrentDirectory`/`GetFullPathName`/`GetKeyboardLayoutName`
+     among them). Every body is an honest "this operation is
+     unavailable" - same idiom as `sound_stub.c`'s `SoundOut` and
+     `stegano_stub.c`'s `SteganoDecodeHBm` - not a step toward actually
+     implementing any of it; CLAUDE.md's stance on not reproducing
+     Emu28's dialog-based UI hasn't changed, this just makes that
+     stance link-clean instead of merely compile-clean.
+   - **`sdl_main.c` needed the rest of `EMU28.C`'s globals** - not just
+     the handful `DISPLAY.C` alone touches (`hWnd`/`hWindowDC`/
+     `Chipset`/...), but everything `SETTINGS.C`/`ENGINE.C`/`TIMER.C`/
+     `KEYBOARD.C`/`MOPS.C`/`DDESERV.C`/`DEBUGGER.C` reference too
+     (settings-flag `BOOL`s, four more `CRITICAL_SECTION`s -
+     `csKeyLock`/`csTLock`/`csSlowLock`/`csDbgLock`, real dialog/
+     thread/palette handles that just start empty since nothing
+     creates a real dialog or CPU thread yet, DDE's inert
+     `szAppName`/`szTopic`/`uCF_HpObj`, `lFreq` - now genuinely
+     populated via the already-real `QueryPerformanceFrequency`).
+     `SetWindowTitle` got a real body too (`SDL_SetWindowTitle` -
+     milestone 4's window genuinely exists now, so this one didn't
+     need to stay a stub); `ForceForegroundWindow`/
+     `CopyItemsToClipboard` are honest no-ops, same reasoning as
+     `win32_ui_stub.c`'s functions. Two of `sdl_main.c`'s *own*
+     milestone-4 placeholder bodies had to come back out once this
+     linked the real thing alongside them for the first time
+     (duplicate-symbol conflicts, same shape as the `LoadBitmapFile`
+     one already resolved above): its `DrawAnnunciator` stub (real one
+     now linked in from `KML.C`) and nothing else needed removing -
+     `LoadBitmapFile`'s removal from `gdi.c` (this same milestone, see
+     that entry above) was the only other one.
+
+   Explicitly **not** claimed by this milestone: the resulting
+   executable doesn't behave any differently than milestone 4's
+   original slice at runtime - `sdl_main.c`'s own code still never
+   calls `InitKML`, `MapRom`, or `CreateThread` on `WorkerThread`, so
+   no ROM loads, no real skin gets parsed, and the CPU never runs; all
+   of `KML.C`/`FILES.C`/`ENGINE.C`'s real logic is now linked in and
+   *reachable*, but nothing in `sdl_main.c` calls it yet - that's real
+   milestone-4-completion work, still ahead, not something this link
+   milestone did in passing. What this milestone actually proves is
+   narrower but still significant: the whole shim's Win32 surface is
+   now large enough, and consistent enough across every vendor file
+   that touches it, for the *entire* upstream codebase to link into one
+   coherent program - the strongest cross-file consistency check this
+   project has run yet, well beyond what compiling each file standalone
+   could catch (a per-file `-fsyntax-only` check can't see a type
+   mismatch between two files' independent uses of the same shim
+   function, the way a real link's "conflicting types"/duplicate-symbol
+   errors can and did, twice, this session).
 
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the

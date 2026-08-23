@@ -69,6 +69,62 @@ CHIPSET  Chipset; /* zero-initialized: display renders correctly in its "off" st
 KmlAnnunciator pAnnunciator[7]; /* zeroed: no annunciators without KML.C's real InitAnnunciator */
 BOOL     bAlwaysOnTop = FALSE;
 
+/* ---- the rest of EMU28.C's globals -------------------------------------------------
+ * Milestone 7's whole-program link needs every global EMU28.C would
+ * normally define, not just the handful DISPLAY.C's own slice needed.
+ * Settings flags default FALSE (SETTINGS.C's ReadSettings overwrites
+ * them with real values off Emu28.ini at startup - these are only the
+ * pre-ReadSettings defaults); dialog/thread/lock handles are real but
+ * empty, since nothing has created an actual dialog or CPU thread yet
+ * (that's still ahead - see the file header comment); szAppName/
+ * szTopic/szTitle/uCF_HpObj only matter to DDE, which is declared-only
+ * everywhere else in this shim too, so their exact values are inert. */
+
+BOOL   bAutoSave = FALSE;
+BOOL   bAutoSaveOnExit = FALSE;
+BOOL   bSaveDefConfirm = FALSE;
+BOOL   bStartupBackup = FALSE;
+BOOL   bAlwaysDisplayLog = FALSE;
+BOOL   bLoadObjectWarning = FALSE;
+BOOL   bShowTitle = TRUE;
+BOOL   bShowMenu = TRUE;
+BOOL   bActFollowsMouse = FALSE;
+BOOL   bClientWinMove = FALSE;
+BOOL   bSingleInstance = FALSE;
+
+CRITICAL_SECTION csKeyLock;
+CRITICAL_SECTION csTLock;
+CRITICAL_SECTION csSlowLock;
+CRITICAL_SECTION csDbgLock;
+
+DWORD  dwTColor;
+DWORD  dwTColorTol;
+DWORD  dwWakeupDelay;
+DWORD  dwWaveTime;
+DWORD  dwWaveVol;
+
+HINSTANCE hApp = (HINSTANCE)(intptr_t)1; /* dummy non-NULL, same reasoning as hPalette - only ever passed to declared-only functions */
+HWND   hDlgDebug;
+HWND   hDlgFind;
+HWND   hDlgProfile;
+HWND   hDlgRplObjView;
+HANDLE hEventShutdn;
+HPALETTE hOldPalette;
+HRGN   hRgn;
+HCURSOR hCursorArrow;
+HCURSOR hCursorHand;
+HANDLE hThread;
+DWORD  idDdeInst;
+LARGE_INTEGER lFreq;
+static CHAR szAppNameBuf[] = "Emu28";
+static CHAR szTopicBuf[] = "System";
+static CHAR szTitleBuf[] = "Emu28";
+LPTSTR szAppName = szAppNameBuf;
+LPTSTR szTopic = szTopicBuf;
+LPTSTR szTitle = szTitleBuf;
+UINT   uCF_HpObj;
+UINT   uWaveDevId;
+
 static SDL_Window *g_window;
 
 /* ---- window-management stubs (see file header comment) ----------------------------- */
@@ -155,17 +211,26 @@ BOOL SetWindowPlacement(HWND hwnd, CONST WINDOWPLACEMENT *lpwndpl)
 	return TRUE;
 }
 
+VOID SetWindowTitle(LPCTSTR szString)
+{
+	if (g_window)
+		SDL_SetWindowTitle(g_window, szString);
+}
+
+VOID ForceForegroundWindow(HWND hWnd)
+{
+	(void)hWnd; /* real activation-stealing trick for a minimized/background window - not meaningful without native window chrome */
+}
+
+VOID CopyItemsToClipboard(HWND hWnd)
+{
+	(void)hWnd; /* clipboard access is declared-only (see win32_types.h's clipboard section) - nothing to copy into */
+}
+
 HMENU GetMenu(HWND hwnd)
 {
 	(void)hwnd;
 	return NULL; /* no native menu - not the plan for this port at all, per CLAUDE.md */
-}
-
-VOID DrawAnnunciator(UINT nId, BOOL bOn, DWORD dwColor)
-{
-	(void)nId;
-	(void)bOn;
-	(void)dwColor; /* KML.C's real implementation - unreachable this slice, pAnnunciator is all zeros */
 }
 
 UINT timeSetEvent(UINT uDelay, UINT uResolution, LPTIMECALLBACK lpTimeProc, DWORD_PTR dwUser, UINT fuEvent)
@@ -197,6 +262,11 @@ int main(int argc, char **argv)
 
 	InitializeCriticalSection(&csGDILock);
 	InitializeCriticalSection(&csLcdLock);
+	InitializeCriticalSection(&csKeyLock);
+	InitializeCriticalSection(&csTLock);
+	InitializeCriticalSection(&csSlowLock);
+	InitializeCriticalSection(&csDbgLock);
+	QueryPerformanceFrequency(&lFreq);
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
 		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
