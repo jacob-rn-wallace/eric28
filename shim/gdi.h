@@ -211,9 +211,68 @@ typedef void* HPEN;
 #define BLACK_PEN 0
 #define WHITE_PEN 1
 
+#define NULL_BRUSH       5
+#define DEFAULT_GUI_FONT 17
+
 extern HGDIOBJ GetStockObject(INT fnObject);
 extern BOOL    MoveToEx(HDC hdc, INT x, INT y, LPVOID lpPoint);
 extern BOOL    LineTo(HDC hdc, INT x, INT y);
+
+/* ---- fonts and text output (DEBUGGER.C's disassembly/register/memory views) -------
+ * Declared only, same reasoning as the rest of DEBUGGER.C's Win32
+ * surface (see win32_types.h's "debugger window UI" section) - real
+ * text rendering (font metrics, glyph rasterization) is a much bigger
+ * undertaking than this shim's flat-color GDI subset, and would only
+ * ever be exercised by a debugger window this project doesn't render
+ * in the first place. */
+
+typedef void* HFONT;
+
+#define ANSI_CHARSET         0
+#define CLIP_DEFAULT_PRECIS  0
+#define OUT_DEFAULT_PRECIS   0
+#define DEFAULT_QUALITY      0
+#define FF_DONTCARE          0
+#define FW_NORMAL            400
+#define FW_BOLD              700
+#define LOGPIXELSY           90
+#define ETO_OPAQUE           0x0002
+
+typedef struct {
+	LONG tmHeight;
+	LONG tmAscent;
+	LONG tmDescent;
+	LONG tmInternalLeading;
+	LONG tmExternalLeading;
+	LONG tmAveCharWidth;
+	LONG tmMaxCharWidth;
+	LONG tmWeight;
+	LONG tmOverhang;
+	LONG tmDigitizedAspectX;
+	LONG tmDigitizedAspectY;
+	BYTE tmFirstChar;
+	BYTE tmLastChar;
+	BYTE tmDefaultChar;
+	BYTE tmBreakChar;
+	BYTE tmItalic;
+	BYTE tmUnderlined;
+	BYTE tmStruckOut;
+	BYTE tmPitchAndFamily;
+	BYTE tmCharSet;
+} TEXTMETRIC, *LPTEXTMETRIC;
+
+extern HFONT   CreateFont(INT cHeight, INT cWidth, INT cEscapement, INT cOrientation, INT cWeight,
+                           DWORD bItalic, DWORD bUnderline, DWORD bStrikeOut, DWORD iCharSet,
+                           DWORD iOutPrecision, DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily,
+                           LPCTSTR pszFaceName);
+extern BOOL    ExtTextOut(HDC hdc, INT x, INT y, UINT fuOptions, CONST RECT *lprc,
+                           LPCTSTR lpString, UINT cbCount, CONST INT *lpDx);
+extern BOOL    GetTextMetrics(HDC hdc, LPTEXTMETRIC lptm);
+extern INT     GetDeviceCaps(HDC hdc, INT nIndex);
+extern BOOL    DrawFocusRect(HDC hdc, CONST RECT *lprc);
+extern COLORREF GetTextColor(HDC hdc);
+extern COLORREF SetTextColor(HDC hdc, COLORREF color);
+extern COLORREF GetBkColor(HDC hdc);
 
 /* ---- bitmap file loading ---------------------------------------------------------
  * FILES.C's eventual job long-term; a real, narrow implementation

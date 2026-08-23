@@ -147,6 +147,13 @@ BOOL SetEndOfFile(HANDLE hFile)
 	return pos != (off_t)-1 && ftruncate(h->u.file.fd, pos) == 0;
 }
 
+BOOL FlushFileBuffers(HANDLE hFile)
+{
+	Win32Handle *h = (Win32Handle *)hFile;
+
+	return fsync(h->u.file.fd) == 0;
+}
+
 /* ---- file mapping ------------------------------------------------------------------
  * MapViewOfFile hands back a bare pointer (matching real Win32), not a
  * tagged HANDLE, so UnmapViewOfFile can't recover the mapping's length

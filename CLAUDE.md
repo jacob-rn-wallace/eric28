@@ -284,6 +284,7 @@ because they're not GDI/window/registry/sound:
 | Menu API + MRU's path helpers (`InsertMenu`, `GetFullPathName`) | `MRU.C` | Declared only - blocked on a menu-replacement design that doesn't exist yet |
 | Cursor creation (`CreateCursor`) | `CURSOR.C` | Declared only (GDI, milestone 3) |
 | Window icon loading (`LoadImage`, `WM_SETICON`) | `FILES.C` | Declared only (milestone 7 - purely cosmetic, `.ico` unsupported) |
+| Debugger window UI (dialogs, common controls, resource loading, fonts, virtual-key codes) | `DEBUGGER.C` | Declared only (milestone 7 - real breakpoint-list logic only, the dialog/toolbar/tooltip UI around it never renders) |
 | Window regions (`ExtCreateRegion`, `RGNDATA`) | `FILES.C` | Declared only (milestone 7 - same bucket as `SetWindowRgn` below) |
 | Steganographic ROM-in-bitmap decoding (`SteganoDecodeHBm`) | `FILES.C` | Stubbed (milestone 7 - single honest-failure body, `STEGANO.C` itself untouched per milestone 6) |
 
@@ -436,11 +437,17 @@ as literal dialogs).
    to be real portable-primitive territory (POSIX `opendir`/`readdir`/
    `fnmatch`, `fstat`, `chdir`, plain arithmetic) and got real
    implementations instead, same bucket as milestone 2's file-I/O
-   work. All 21 of vendor's non-window/registry/sound files now
-   compile clean (the 19 from milestone 2 plus `DISPLAY.C` and
-   `KML.C`) - `EMU28.C`, `SETTINGS.C`, and the DirectSound/`waveOut`
-   files are the only ones left, and per the table above they're
-   pure window/registry/sound - milestones 4 and 5's job, not GDI's.
+   work. All 21 of vendor's non-window/registry/sound/debugger files
+   now compile clean (the 19 from milestone 2 plus `DISPLAY.C` and
+   `KML.C`) - `EMU28.C`, `SETTINGS.C`, `DEBUGGER.C`, and the
+   DirectSound/`waveOut` files are the only ones left, and per the
+   table above they're pure window/registry/sound/debugger-dialog-UI -
+   milestones 4, 5, and 7's job, not GDI's. (Correction, milestone 7:
+   this note originally undercounted by one - `DEBUGGER.C` is also in
+   the GDI-touching category per the table above and was never
+   actually attempted this milestone, despite this paragraph's original
+   wording arguably implying otherwise; it stayed genuinely unbuilt
+   until milestone 7 tackled it directly - see that section below.)
 4. SDL2 event loop replacing `EMU28.C`'s window/message-pump section
    (small surface, per the table above) - this is also where the
    thread/event-sync `HANDLE` design decision flagged above belongs
@@ -680,6 +687,42 @@ as literal dialogs).
    262144), and both the very first packed byte and a byte further into
    the ROM unpack to the exact nibble values hand-computed from the
    file's own raw bytes.
+
+   **`DEBUGGER.C` done too**, same session - `FILES.C`'s breakpoint-
+   list calls (`LoadBreakpointList`/`SaveBreakpointList`/
+   `CreateBackupBreakpointList`/`RestoreBackupBreakpointList`/
+   `DisableDebugger`/`OnToolDebug`) need it to compile as a unit, and
+   milestone 3's own completion note had incorrectly implied it was
+   already handled (see the correction just above). Emu28's
+   disassembler/memory/stack/breakpoint debugger window - 3883 lines,
+   almost entirely native Win32 dialog/common-control UI (owner-drawn
+   list boxes, a toolbar built from an `RT_TOOLBAR` resource, a system-
+   menu extension, tooltips, several modeless dialogs) with a small
+   real core (the breakpoint list itself). ~160 distinct declared-only
+   additions to `win32_types.h`'s new "debugger window UI" section and
+   `gdi.h`'s new font/text-output section (window/menu/dialog
+   functions, listbox/combobox/toolbar messages and notification
+   structs, virtual-key codes, resource loading, fonts) - same
+   treatment as every other native-dialog-shaped surface this project
+   has already ruled out reproducing, just far more of it in one file.
+   `CheckMenuItem`/`EnableMenuItem` extended the existing menu-API
+   section; `FlushFileBuffers` (real, `fsync`-backed) joined
+   `win32_handle.c`'s other real file-I/O functions. Verified to the
+   same bar as milestones 2's original 19-file pass (compile-clean, no
+   regressions to any of milestone 7's other three real-behavior tests
+   or the milestone-4 SDL link) rather than milestone 3/4's deeper
+   real-link-and-run treatment - unlike `FILES.C`'s `MapRom()` or the
+   GDI DIB functions, `DEBUGGER.C`'s only non-dialog real logic (the
+   breakpoint list) is a thin, low-risk wrapper around already-
+   thoroughly-tested `ReadFile`/`WriteFile`, and a real link-and-run
+   test of it would need on the order of 100+ additional throwaway
+   stubs for `DEBUGGER.C`'s other dependencies (the disassembler,
+   RPL-object viewer, settings I/O, `ENGINE.C` globals) for very little
+   additional confidence - not worth it here, unlike `MapRom()` where
+   the real ROM-unpack algorithm itself was the thing being verified.
+   All 24 non-window/registry/sound vendor files (every file left
+   except `EMU28.C` and the DirectSound/`waveOut` pair) now compile
+   clean.
 
 No build system exists yet. Given the file-portability split above, a
 CMake setup mirroring `vger`'s own (`core`-style static library for the

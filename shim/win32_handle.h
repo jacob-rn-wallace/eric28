@@ -67,6 +67,7 @@ extern BOOL   WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWr
 extern DWORD  SetFilePointer(HANDLE hFile, LONG lDistanceToMove, LONG *lpDistanceToMoveHigh, DWORD dwMoveMethod);
 extern DWORD  GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh);
 extern BOOL   SetEndOfFile(HANDLE hFile);
+extern BOOL   FlushFileBuffers(HANDLE hFile);
 
 /* ---- file mapping (FILES.C's LoadBitmapFile/MapRom-adjacent code) ----------------
  * A fourth HANDLE kind (see this file's header comment for the tagged-

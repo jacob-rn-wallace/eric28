@@ -905,6 +905,9 @@ extern BOOL    PostMessage(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);
 #define MF_SEPARATOR  0x00000800
 #define MF_BYCOMMAND  0x00000000
 #define MF_BYPOSITION 0x00000400
+#define MF_ENABLED    0x00000000
+#define MF_CHECKED    0x00000008
+#define MF_UNCHECKED  0x00000000
 
 extern HMENU GetMenu(HWND hWnd);
 extern HMENU GetSubMenu(HMENU hMenu, INT nPos);
@@ -917,6 +920,19 @@ extern BOOL  DeleteMenu(HMENU hMenu, UINT uPosition, UINT uFlags);
 extern BOOL  IsMenu(HMENU hMenu);
 extern DWORD GetCurrentDirectory(DWORD nBufferLength, LPTSTR lpBuffer);
 extern DWORD GetFullPathName(LPCTSTR lpFileName, DWORD nBufferLength, LPTSTR lpBuffer, LPTSTR *lpFilePart);
+
+/* DEBUGGER.C's own menu/system-menu use (milestone 7's follow-up on
+ * getting DEBUGGER.C to compile - see the big block below this
+ * section for the rest of it). Same declared-only bucket as the rest
+ * of this section - a debugger window's menu bar is exactly the kind
+ * of native-dialog-shaped UI CLAUDE.md already rules out. */
+extern BOOL  AppendMenu(HMENU hMenu, UINT uFlags, UINT_PTR uIDNewItem, LPCTSTR lpNewItem);
+extern BOOL  DestroyMenu(HMENU hMenu);
+extern HMENU LoadMenu(HINSTANCE hInstance, LPCTSTR lpMenuName);
+extern HMENU GetSystemMenu(HWND hWnd, BOOL bRevert);
+extern BOOL  TrackPopupMenu(HMENU hMenu, UINT uFlags, INT x, INT y, INT nReserved, HWND hWnd, CONST RECT *prcRect);
+extern BOOL  CheckMenuItem(HMENU hMenu, UINT uIDCheckItem, UINT uCheck);
+extern BOOL  EnableMenuItem(HMENU hMenu, UINT uIDEnableItem, UINT uEnable);
 
 /* ---- window management (DISPLAY.C's ResizeWindow/StopDisplay) --------------------------------
  * Real window sizing/positioning/repaint-invalidation, genuinely
@@ -1102,6 +1118,235 @@ typedef struct {
 extern LPITEMIDLIST SHBrowseForFolder(LPBROWSEINFO lpbi);
 extern HRESULT       SHGetMalloc(LPMALLOC *ppMalloc);
 extern BOOL           SHGetPathFromIDList(LPITEMIDLIST pidl, LPTSTR pszPath);
+
+/* ---- debugger window UI (DEBUGGER.C, milestone 7's follow-up) ---------------------
+ * DEBUGGER.C is Emu28's disassembler/memory/stack/breakpoint debugger
+ * window - three owner-drawn list boxes, a toolbar, a system-menu
+ * extension, tooltips, and several modeless dialogs, all built from
+ * native Win32 common controls and dialog resources (RESOURCE.H
+ * supplies the numeric IDD_, IDC_, and IDR_ constants it references,
+ * already just plain #defines - no shim work needed there). None of
+ * this has an SDL2 equivalent, and CLAUDE.md already rules out
+ * reproducing Emu28's dialog-based UI literally - same declared-only
+ * treatment as the dialog/menu/DDE/shell-browsing groups elsewhere in
+ * this file, just a lot more surface area because a debugger window
+ * is a much bigger UI than a single settings dialog. The point of
+ * declaring all of it is only so this file - and the real breakpoint-
+ * list logic (LoadBreakpointList/SaveBreakpointList/
+ * CreateBackupBreakpointList/RestoreBackupBreakpointList/
+ * DisableDebugger/OnToolDebug, all real, all called by FILES.C)
+ * compiles as one translation unit; nothing here is ever meant to
+ * actually show a window. */
+
+typedef void* HICON;
+typedef void* HRSRC;
+typedef void* HGLOBAL;
+
+typedef struct {
+	SHORT x;
+	SHORT y;
+} POINTS;
+
+#define MAKEPOINTS(l)      (*((POINTS *)&(l)))
+#define POINTSTOPOINT(pt, pts) ((pt).x = (LONG)(SHORT)(pts).x, (pt).y = (LONG)(SHORT)(pts).y)
+#define MAKELPARAM(lo, hi) ((LPARAM)(DWORD)MAKELONG((lo), (hi)))
+
+/* virtual-key codes */
+#define VK_SPACE    0x20
+#define VK_PRIOR    0x21
+#define VK_NEXT     0x22
+#define VK_LEFT     0x25
+#define VK_UP       0x26
+#define VK_RIGHT    0x27
+#define VK_DOWN     0x28
+#define VK_F2       0x71
+#define VK_F5       0x74
+#define VK_F6       0x75
+#define VK_F7       0x76
+#define VK_F8       0x77
+#define VK_F9       0x78
+#define VK_F11      0x7A
+#define VK_ADD      0x6B
+#define VK_SUBTRACT 0x6D
+
+/* window messages */
+#define WM_SETREDRAW      0x000B
+#define WM_CLOSE          0x0010
+#define WM_SETCURSOR      0x0020
+#define WM_SETFONT        0x0030
+#define WM_DRAWITEM       0x002B
+#define WM_MEASUREITEM    0x002C
+#define WM_VKEYTOITEM     0x002E
+#define WM_DESTROY        0x0002
+#define WM_LBUTTONUP      0x0202
+#define WM_NOTIFY         0x004E
+#define WM_CONTEXTMENU    0x007B
+#define WM_CTLCOLORSTATIC 0x0138
+#define WM_USER           0x0400
+
+/* listbox control messages/notifications */
+#define LB_ERR             (-1)
+#define LB_ADDSTRING       0x0180
+#define LB_INSERTSTRING    0x0181
+#define LB_DELETESTRING    0x0182
+#define LB_RESETCONTENT    0x0184
+#define LB_GETSEL          0x0187
+#define LB_SETCURSEL       0x0186
+#define LB_GETCURSEL       0x0188
+#define LB_GETTEXT         0x0189
+#define LB_GETCOUNT        0x018B
+#define LB_GETTOPINDEX     0x018E
+#define LB_SETTOPINDEX     0x0197
+#define LB_GETITEMRECT     0x0198
+#define LB_GETITEMDATA     0x0199
+#define LB_SETITEMDATA     0x019A
+#define LB_SETCARETINDEX   0x019E
+#define LB_GETCARETINDEX   0x019F
+#define LBN_DBLCLK    2
+#define LBN_SETFOCUS  4
+#define LBN_KILLFOCUS 5
+
+/* combobox control messages/notifications */
+#define CB_GETLBTEXT        0x0148
+#define CB_GETCOUNT         0x0146
+#define CB_FINDSTRINGEXACT  0x0158
+#define CB_SELECTSTRING     0x014D
+#define CBN_SETFOCUS  3
+#define CBN_SELENDOK  9
+
+#define BM_SETCHECK 0x00F1
+#define EM_SETSEL   0x00B1
+
+/* window styles/positioning */
+#define WS_CHILD   0x40000000
+#define WS_VISIBLE 0x10000000
+#define SWP_NOSIZE 0x0001
+#define SW_RESTORE 9
+#define CW_USEDEFAULT ((INT)0x80000000)
+#define GWL_USERDATA (-21)
+#define CWP_SKIPDISABLED 0x0002
+
+/* system colors (GetSysColor indices) */
+#define COLOR_HIGHLIGHT     13
+#define COLOR_HIGHLIGHTTEXT 14
+#define COLOR_BTNFACE       15
+
+extern HWND    ChildWindowFromPointEx(HWND hwndParent, POINT pt, UINT uFlags);
+extern INT     GetDlgCtrlID(HWND hWnd);
+extern HWND    GetParent(HWND hWnd);
+extern HWND    GetActiveWindow(VOID);
+extern HWND    GetLastActivePopup(HWND hWndOwner);
+extern BOOL    GetWindowRect(HWND hWnd, LPRECT lpRect);
+extern INT     GetWindowText(HWND hWnd, LPTSTR lpString, INT nMaxCount);
+extern INT     GetWindowTextLength(HWND hWnd);
+extern BOOL    SetWindowText(HWND hWnd, LPCTSTR lpString);
+extern LONG_PTR SetWindowLongPtr(HWND hWnd, INT nIndex, LONG_PTR dwNewLong);
+extern BOOL    ShowWindow(HWND hWnd, INT nCmdShow);
+extern HDC     GetDC(HWND hWnd);
+extern INT     ReleaseDC(HWND hWnd, HDC hDC);
+extern HWND    SetFocus(HWND hWnd);
+extern HWND    CreateDialog(HINSTANCE hInstance, LPCTSTR lpTemplate, HWND hWndParent, DLGPROC lpDialogFunc);
+extern UINT    GetSysColor(INT nIndex);
+
+/* resource loading - FindResource/LoadResource/LockResource/
+ * FreeResource are the pre-Win32 resource API (superseded by
+ * LoadIcon/LoadBitmap/etc. for most uses, but DEBUGGER.C still uses
+ * this quartet directly to pull its toolbar-button layout out of an
+ * RT_TOOLBAR resource, per CToolBarData's own definition right there
+ * in DEBUGGER.C). No .RES/.RC resource file is compiled into this
+ * port at all (see CLAUDE.md's EMU28.RC note), so these can never
+ * find anything real - declared only, same bucket as the rest of this
+ * section. */
+extern HRSRC   FindResource(HINSTANCE hModule, LPCTSTR lpName, LPCTSTR lpType);
+extern HGLOBAL LoadResource(HINSTANCE hModule, HRSRC hResInfo);
+extern LPVOID  LockResource(HGLOBAL hResData);
+extern BOOL    FreeResource(HGLOBAL hResData);
+extern HBITMAP LoadBitmap(HINSTANCE hInstance, LPCTSTR lpBitmapName);
+extern HICON   LoadIcon(HINSTANCE hInstance, LPCTSTR lpIconName);
+
+/* common controls (toolbar + tooltips + owner-draw notifications) */
+
+typedef struct {
+	INT  iBitmap;
+	INT  idCommand;
+	BYTE fsState;
+	BYTE fsStyle;
+	DWORD_PTR dwData;
+	INT_PTR   iString;
+} TBBUTTON, *LPTBBUTTON;
+
+#define TBSTATE_ENABLED  0x04
+#define TBSTYLE_BUTTON   0x00
+#define TBSTYLE_SEP      0x01
+#define TBSTYLE_TOOLTIPS 0x0100
+#define TB_ENABLEBUTTON  (WM_USER + 1)
+
+extern VOID InitCommonControls(VOID);
+extern HWND CreateToolbarEx(HWND hwnd, DWORD ws, UINT wID, INT nBitmaps, HINSTANCE hBMInst, UINT_PTR wBMID,
+                             LPTBBUTTON lpButtons, INT iNumButtons, INT dxButton, INT dyButton,
+                             INT dxBitmap, INT dyBitmap, UINT uStructSize);
+
+typedef struct {
+	HWND hwndFrom;
+	UINT_PTR idFrom;
+	UINT code;
+} NMHDR, *LPNMHDR;
+
+#define TTN_GETDISPINFO ((UINT)-3)
+
+typedef struct {
+	NMHDR hdr;
+	LPSTR lpszText;
+	CHAR  szText[80];
+	HINSTANCE hinst;
+	UINT  uFlags;
+	LPARAM lParam;
+} TOOLTIPTEXT, *LPTOOLTIPTEXT;
+
+typedef struct {
+	UINT CtlType;
+	UINT CtlID;
+	UINT itemID;
+	UINT itemAction;
+	UINT itemState;
+	HWND hwndItem;
+	HDC  hDC;
+	RECT rcItem;
+	ULONG_PTR itemData;
+} DRAWITEMSTRUCT, *LPDRAWITEMSTRUCT;
+
+typedef struct {
+	UINT CtlType;
+	UINT CtlID;
+	UINT itemID;
+	UINT itemWidth;
+	UINT itemHeight;
+	ULONG_PTR itemData;
+} MEASUREITEMSTRUCT, *LPMEASUREITEMSTRUCT;
+
+#define ODS_SELECTED 0x0001
+#define ODS_FOCUS    0x0010
+
+#define OPEN_ALWAYS 4
+
+/* tchar.h's remaining generic-text CRT functions DEBUGGER.C needs -
+ * same "TCHAR == char, so these are just the ANSI forms" reasoning as
+ * win32_types.h's earlier _tcs.../lstr... block. */
+#define _istxdigit(c)       isxdigit((int)(c))
+#define _totupper(c)        toupper((int)(c))
+#define _tcscat(dst, src)   strcat((dst), (src))
+#define _stscanf            sscanf
+
+static inline int _sntprintf(char *buf, size_t n, const char *fmt, ...)
+{
+	va_list args;
+	int r;
+
+	va_start(args, fmt);
+	r = vsnprintf(buf, n, fmt, args);
+	va_end(args);
+	return r;
+}
 
 #ifdef __cplusplus
 }
